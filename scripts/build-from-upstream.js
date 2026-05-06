@@ -135,7 +135,7 @@ function buildMac(platform) {
   const zipName = `Codex-${platform}-${version}.zip`;
   const zipPath = path.join(OUT_DIR, zipName);
   console.log(`   [zip] ${zipName}`);
-  execSync(`cd "${outAppDir}" && zip -r -y -q "${zipPath}" Codex.app`);
+  execSync(`zip -r -y -q "${zipPath}" Codex.app`, { cwd: outAppDir });
 
   const sizeMB = (fs.statSync(zipPath).size / 1048576).toFixed(1);
   console.log(`   [ok] ${zipPath} (${sizeMB} MB)`);
@@ -179,12 +179,12 @@ function buildWin(platform) {
   // Replace codex CLI
   replaceCodex(platform, resourcesDir, "codex.exe");
 
-  // Create ZIP
+  // Create ZIP (use 7zz — works on all platforms, already installed in CI)
   const version = getVersion(asarDir);
   const zipName = `Codex-win-x64-${version}.zip`;
   const zipPath = path.join(OUT_DIR, zipName);
   console.log(`   [zip] ${zipName}`);
-  execSync(`cd "${outAppDir}" && zip -r -q "${zipPath}" .`);
+  execSync(`7zz a -tzip -mx=5 "${zipPath}" .`, { cwd: outApp });
 
   const sizeMB = (fs.statSync(zipPath).size / 1048576).toFixed(1);
   console.log(`   [ok] ${zipPath} (${sizeMB} MB)`);
