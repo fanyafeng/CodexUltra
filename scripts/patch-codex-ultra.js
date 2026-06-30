@@ -116,11 +116,13 @@ function rendererInjectionSource() {
   const STYLE_ID = "codex-ultra-style";
   const state = { mode: localStorage.getItem("codexUltra.mode") || "codex_execute" };
   let installScheduled = false;
+  let lastModeTarget = null;
+  let cachedGptAccount = null;
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement("style");
     style.id = STYLE_ID;
-    style.textContent = ".codex-ultra-mode-slot{position:fixed;display:inline-flex;align-items:center;justify-content:center;z-index:20;pointer-events:auto;min-width:0}.codex-ultra-mode-switch{display:inline-flex;gap:1px;align-items:center;height:28px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:7px;padding:2px;background:color-mix(in srgb,currentColor 5%,transparent);white-space:nowrap;box-sizing:border-box}.codex-ultra-mode-switch button{height:22px;border:0;background:transparent;color:inherit;border-radius:5px;padding:0 8px;font-size:13px;font-weight:500;line-height:22px;cursor:pointer;white-space:nowrap}.codex-ultra-mode-switch button.active{background:color-mix(in srgb,currentColor 16%,transparent);font-weight:650}";
+    style.textContent = ".codex-ultra-mode-slot{position:fixed;display:inline-flex;align-items:center;justify-content:center;z-index:20;pointer-events:auto;min-width:0}.codex-ultra-mode-switch{display:inline-flex;gap:1px;align-items:center;height:28px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:7px;padding:2px;background:color-mix(in srgb,currentColor 5%,transparent);white-space:nowrap;box-sizing:border-box}.codex-ultra-mode-switch button{height:22px;border:0;background:transparent;color:inherit;border-radius:5px;padding:0 8px;font-size:13px;font-weight:500;line-height:22px;cursor:pointer;white-space:nowrap}.codex-ultra-mode-switch button.active{background:color-mix(in srgb,currentColor 16%,transparent);font-weight:650}.codex-ultra-gpt-account{position:fixed;z-index:21;display:none;pointer-events:none;min-width:84px;max-width:150px;white-space:nowrap;overflow:hidden;text-align:left;color:inherit}.codex-ultra-gpt-account-title{display:block;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:650;line-height:14px}.codex-ultra-gpt-account-desc{display:block;overflow:hidden;text-overflow:ellipsis;font-size:10px;font-weight:450;line-height:12px;color:color-mix(in srgb,currentColor 62%,transparent)}";
     document.head.appendChild(style);
   }
   function visibleText(element) {
@@ -134,7 +136,7 @@ function rendererInjectionSource() {
     if (!element || !(element instanceof Element)) return false;
     const rect = element.getBoundingClientRect();
     const style = getComputedStyle(element);
-    return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none";
+    return rect.width > 0 && rect.height > 0 && style.display !== "none";
   }
   function setMode(mode) {
     state.mode = mode;
@@ -143,6 +145,7 @@ function rendererInjectionSource() {
       button.classList.toggle("active", button.dataset.mode === mode);
       button.setAttribute("aria-pressed", String(button.dataset.mode === mode));
     });
+    updateModeTargetDisplay();
   }
   function buildSwitch() {
     const root = document.createElement("div");
@@ -198,6 +201,136 @@ function rendererInjectionSource() {
     });
     return buttons.sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right)[0] || null;
   }
+  function readObjectAccount(value) {
+    if (!value || typeof value !== "object") return null;
+    const email = String(value.email || value.emailAddress || value.user_email || value.accountEmail || "").trim();
+    const title = String(value.name || value.displayName || value.fullName || value.title || value.username || value.userName || "").trim();
+    if (!email && !title) return null;
+    const fallbackTitle = email ? email.split("@")[0] : "GPT规划";
+    return { title: title || fallbackTitle, desc: email || "未检测到邮箱" };
+  }
+  function rememberGptAccount(value) {
+    const direct = readObjectAccount(value);
+    if (direct?.desc.includes("@")) {
+      cachedGptAccount = direct;
+      if (state.mode === "gpt_plan") updateModeTargetDisplay();
+      return direct;
+    }
+    if (!value || typeof value !== "object") return null;
+    const queue = [value];
+    const seen = new Set();
+    while (queue.length) {
+      const item = queue.shift();
+      if (!item || typeof item !== "object" || seen.has(item)) continue;
+      seen.add(item);
+      const account = readObjectAccount(item);
+      if (account?.desc.includes("@")) {
+        cachedGptAccount = account;
+        if (state.mode === "gpt_plan") updateModeTargetDisplay();
+        return account;
+      }
+      for (const nested of Object.values(item)) {
+        if (nested && typeof nested === "object") queue.push(nested);
+      }
+    }
+    return null;
+  }
+  function installAccountResponseWatcher() {
+    if (typeof fetch !== "function" || fetch.__codexUltraAccountWatcher) return;
+    const originalFetch = fetch.bind(window);
+    const watchedFetch = (...args) => {
+      const promise = originalFetch(...args);
+      promise.then((response) => {
+        const contentType = response.headers?.get?.("content-type") || "";
+        if (!contentType.includes("json")) return;
+        response.clone().json().then(rememberGptAccount).catch(() => {});
+      }).catch(() => {});
+      return promise;
+    };
+    watchedFetch.__codexUltraAccountWatcher = true;
+    window.fetch = watchedFetch;
+  }
+  function readGptAccountFromStorage(storage) {
+    if (!storage) return null;
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i) || "";
+      if (!/(account|profile|user|session|auth)/i.test(key)) continue;
+      const raw = storage.getItem(key);
+      if (!raw || !/@/.test(raw)) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        const queue = [parsed];
+        const seen = new Set();
+        while (queue.length) {
+          const item = queue.shift();
+          if (!item || typeof item !== "object" || seen.has(item)) continue;
+          seen.add(item);
+          const account = readObjectAccount(item);
+          if (account?.desc.includes("@")) return account;
+          for (const value of Object.values(item)) {
+            if (value && typeof value === "object") queue.push(value);
+          }
+        }
+      } catch {
+        const email = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i)?.[0];
+        if (email) return { title: email.split("@")[0], desc: email };
+      }
+    }
+    return null;
+  }
+  function readGptAccount() {
+    if (cachedGptAccount) return cachedGptAccount;
+    const storageAccount = readGptAccountFromStorage(localStorage) || readGptAccountFromStorage(sessionStorage);
+    if (storageAccount) return rememberGptAccount(storageAccount) || storageAccount;
+    const bodyText = visibleText(document.body);
+    const email = bodyText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i)?.[0] || "";
+    if (email) {
+      const emailIndex = bodyText.indexOf(email);
+      const beforeEmail = bodyText.slice(0, emailIndex).split(" ").slice(-4).join(" ").trim();
+      const title = beforeEmail && beforeEmail.length <= 40 ? beforeEmail : email.split("@")[0];
+      return { title, desc: email };
+    }
+    return { title: "GPT规划", desc: "未检测到邮箱" };
+  }
+  function ensureGptAccountOverlay() {
+    let account = document.querySelector(".codex-ultra-gpt-account");
+    if (account) return account;
+    account = document.createElement("div");
+    account.className = "codex-ultra-gpt-account";
+    const title = document.createElement("span");
+    title.className = "codex-ultra-gpt-account-title";
+    const desc = document.createElement("span");
+    desc.className = "codex-ultra-gpt-account-desc";
+    account.append(title, desc);
+    document.body.appendChild(account);
+    return account;
+  }
+  function updateModeTargetDisplay(target) {
+    const rememberedTarget = target || lastModeTarget;
+    const composer = rememberedTarget?.composer || findComposer();
+    const modelSelector = rememberedTarget?.modelSelector || (composer ? findModelSelector(composer) : null);
+    const accountOverlay = ensureGptAccountOverlay();
+    if (!modelSelector) {
+      accountOverlay.style.display = "none";
+      return;
+    }
+    lastModeTarget = { composer, modelSelector, contextInfoButton: rememberedTarget?.contextInfoButton || null };
+    modelSelector.style.visibility = state.mode === "gpt_plan" ? "hidden" : "";
+    if (state.mode !== "gpt_plan") {
+      accountOverlay.style.display = "none";
+      return;
+    }
+    const account = readGptAccount();
+    const modelRect = modelSelector.getBoundingClientRect();
+    const title = accountOverlay.querySelector(".codex-ultra-gpt-account-title");
+    const desc = accountOverlay.querySelector(".codex-ultra-gpt-account-desc");
+    if (title) title.textContent = account.title;
+    if (desc) desc.textContent = account.desc;
+    accountOverlay.style.left = Math.round(modelRect.left) + "px";
+    accountOverlay.style.top = Math.round(modelRect.top + (modelRect.height - 26) / 2) + "px";
+    accountOverlay.style.width = Math.round(Math.max(84, modelRect.width)) + "px";
+    accountOverlay.style.display = "block";
+  }
   function positionModeSlot(slot, composer, modelSelector, contextInfoButton) {
     const composerRect = composer.getBoundingClientRect();
     const modelRect = modelSelector.getBoundingClientRect();
@@ -222,6 +355,7 @@ function rendererInjectionSource() {
   function mountModeControlsInActionSlot(composer) {
     const target = findModeSlotTarget(composer);
     if (!target) return false;
+    lastModeTarget = target;
     let slot = document.querySelector(".codex-ultra-mode-slot");
     if (!slot) {
       slot = document.createElement("div");
@@ -234,10 +368,12 @@ function rendererInjectionSource() {
       slot.replaceChildren(modeSwitch);
     }
     positionModeSlot(slot, target.composer, target.modelSelector, target.contextInfoButton);
+    updateModeTargetDisplay(target);
     return true;
   }
   function install() {
     ensureStyle();
+    installAccountResponseWatcher();
     const composer = findComposer();
     if (!composer) return;
     if (!mountModeControlsInActionSlot(composer)) return;

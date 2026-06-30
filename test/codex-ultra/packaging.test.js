@@ -57,7 +57,6 @@ test("renderer mode switch mounts in the composer action slot without modifying 
   assert.doesNotMatch(renderer, /findModelSelectorMountNode/);
   assert.doesNotMatch(renderer, /updateModelSelectorLabel/);
   assert.doesNotMatch(renderer, /setDisplayIfChanged\(state\.modelSelector/);
-  assert.doesNotMatch(renderer, /codex-ultra-gpt-account/);
   assert.doesNotMatch(renderer, /ensureCodexExecuteModel/);
   assert.doesNotMatch(renderer, /codexUltra:ensureCodexExecuteModel/);
 });
@@ -73,6 +72,21 @@ test("renderer mode switch stays compact and does not inject helper rows into co
   assert.doesNotMatch(renderer, /font:inherit/);
   assert.doesNotMatch(renderer, /codex-ultra-helper/);
   assert.doesNotMatch(renderer, /ensureHelper/);
+});
+
+test("renderer shows GPT account title and email when planning mode is selected", () => {
+  const renderer = fs.readFileSync(path.join(root, "src/mac-arm64/_asar/webview/assets/codex-ultra-renderer.js"), "utf8");
+
+  assert.match(renderer, /codex-ultra-gpt-account/);
+  assert.match(renderer, /codex-ultra-gpt-account-title/);
+  assert.match(renderer, /codex-ultra-gpt-account-desc/);
+  assert.match(renderer, /function readGptAccount/);
+  assert.match(renderer, /function rememberGptAccount/);
+  assert.match(renderer, /function installAccountResponseWatcher/);
+  assert.match(renderer, /function updateModeTargetDisplay/);
+  assert.match(renderer, /lastModeTarget = target/);
+  assert.match(renderer, /target \|\| lastModeTarget/);
+  assert.match(renderer, /modelSelector\.style\.visibility = state\.mode === "gpt_plan" \? "hidden" : ""/);
 });
 
 test("patched preload exposes a restricted CodexUltra IPC bridge", () => {
