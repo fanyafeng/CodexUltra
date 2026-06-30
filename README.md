@@ -1,17 +1,18 @@
 # CodexUltra
 
-`CodexUltra` is an enhanced, cross-platform rebuild of the OpenAI ChatGPT Desktop Application (internally codenamed `Codex` by OpenAI). It introduces custom branding, isolated workspace sessions, custom dev patching, and integrates the **CodexPro Bridge Runtime** to allow agentic workflows directly inside the desktop client.
+`CodexUltra` is an enhanced, cross-platform rebuild of the official **OpenAI Codex Desktop Application** (available on the Microsoft Store as Product ID `9plm9xgg6vks` and macOS Sparkle feeds). It introduces custom branding, isolated workspace sessions, cloud-control bypasses, and integrates the **CodexPro Bridge Runtime** to enable advanced local filesystem integrations with OpenAI's agentic developer platform.
 
 ---
 
 ## 🌟 Key Features
 
-- **CodexPro Bridge Runtime Integration**: Bundles the `vendor/codexpro` source runtime, providing an active IPC channel between the ChatGPT app frontend and your local filesystem.
+- **CodexPro Bridge Runtime Integration**: Bundles the `vendor/codexpro` source runtime, providing an active IPC channel between the desktop app and your local filesystem.
+- **Cloudflare Tunnel Integration**: Automatically provisions a secure **Cloudflare Quick Tunnel** (`https://*.trycloudflare.com`) to expose the local MCP bridge over HTTPS, allowing the ChatGPT Web Agent Connector interface to securely access your local workspace.
 - **Dynamic Mode Switch Panel**: Mounts a custom control panel inside the composer input webview with two modes:
-  - 📝 **GPT Plan (GPT规划)**: Ideal for planning, reading, and reviewing. Prompts are packaged with workspace context and copied to the clipboard, launching the ChatGPT web portal in your browser.
-  - ⚡ **Codex Execute (Codex执行)**: Enables real-time filesystem edits, allowing the model to perform changes and write to files in your local workspace.
-- **UserData Directory Isolation**: Isolates user profile, cache, and state under `CodexUltra` to avoid interfering with any native ChatGPT installations.
-- **Statsig Cloud Control Bypass (App Sunset Patch)**: Bypasses forced client sunset gates (such as `2929582856` which normally displays a full-screen block requiring updates) and maps internal Statsig gates.
+  - 📝 **GPT Plan (GPT规划)**: Ideal for planning, reading, and reviewing. Prompts are packaged with workspace context and copied to the clipboard. The client prompts you to copy the public Tunnel URL and redirects you to the [ChatGPT Connectors Settings](https://chatgpt.com/#settings/Connectors) to easily link the agent.
+  - ⚡ **Codex Execute (Codex执行)**: Enables real-time filesystem edits and terminal commands, allowing the model to perform changes and write to files directly in your local workspace.
+- **UserData Directory Isolation**: Isolates user profile, cache, and state under `CodexUltra` to avoid interfering with official OpenAI Codex installations.
+- **Statsig Cloud Control Bypass (App Sunset Patch)**: Bypasses forced client sunset/update gates (such as Statsig gate `2929582856` which normally displays a full-screen block requiring updates) and maps internal Statsig gates.
 - **Enhanced Debugging**: Enables Chrome DevTools and element inspections directly in production builds.
 - **Internationalization Support**: Patches English (`en-US`) and custom locale injections.
 - **Built-in Security & Safety**: Features automatic API key/secret redaction and strict workspace path traversal checks.
@@ -141,8 +142,9 @@ node --test test/codex-ultra/**/*.test.js
 
 ## 👥 Credits
 
-- **[OpenAI](https://github.com/openai)**: Creator of the original ChatGPT/Codex Desktop client.
+- **[OpenAI](https://github.com/openai)**: Creator of the original OpenAI Codex Desktop client.
 - **[Cometix Space (Haleclipse)](https://github.com/Haleclipse)**: Base cross-platform rebuilding framework and build toolchains.
 - **[fanyafeng](https://github.com/fanyafeng)**: CodexUltra customizations and active development.
 - **[Electron Forge](https://www.electronforge.io/)**: Packaging and distribution toolchain.
+
 
