@@ -1,71 +1,148 @@
-# Codex Desktop Rebuild
+# CodexUltra
 
-Cross-platform Electron build for OpenAI Codex Desktop App.
+`CodexUltra` is an enhanced, cross-platform rebuild of the OpenAI ChatGPT Desktop Application (internally codenamed `Codex` by OpenAI). It introduces custom branding, isolated workspace sessions, custom dev patching, and integrates the **CodexPro Bridge Runtime** to allow agentic workflows directly inside the desktop client.
 
-## Supported Platforms
+---
 
-| Platform | Architecture | Status |
-|----------|--------------|--------|
-| macOS    | x64, arm64   | ✅     |
-| Windows  | x64          | ✅     |
-| Linux    | x64, arm64   | ✅     |
+## 🌟 Key Features
 
-## Build
+- **CodexPro Bridge Runtime Integration**: Bundles the `vendor/codexpro` source runtime, providing an active IPC channel between the ChatGPT app frontend and your local filesystem.
+- **Dynamic Mode Switch Panel**: Mounts a custom control panel inside the composer input webview with two modes:
+  - 📝 **GPT Plan (GPT规划)**: Ideal for planning, reading, and reviewing. Prompts are packaged with workspace context and copied to the clipboard, launching the ChatGPT web portal in your browser.
+  - ⚡ **Codex Execute (Codex执行)**: Enables real-time filesystem edits, allowing the model to perform changes and write to files in your local workspace.
+- **UserData Directory Isolation**: Isolates user profile, cache, and state under `CodexUltra` to avoid interfering with any native ChatGPT installations.
+- **Statsig Cloud Control Bypass (App Sunset Patch)**: Bypasses forced client sunset gates (such as `2929582856` which normally displays a full-screen block requiring updates) and maps internal Statsig gates.
+- **Enhanced Debugging**: Enables Chrome DevTools and element inspections directly in production builds.
+- **Internationalization Support**: Patches English (`en-US`) and custom locale injections.
+- **Built-in Security & Safety**: Features automatic API key/secret redaction and strict workspace path traversal checks.
 
-```bash
-# Install dependencies
-npm install
+---
 
-# Build for current platform
-npm run build
-
-# Build for specific platform
-npm run build:mac-x64
-npm run build:mac-arm64
-npm run build:win-x64
-npm run build:linux-x64
-npm run build:linux-arm64
-
-# Build all platforms
-npm run build:all
-```
-
-## Development
-
-```bash
-npm run dev
-```
-
-## Project Structure
+## 🛠️ Project Architecture
 
 ```
 ├── src/
-│   ├── .vite/build/     # Main process (Electron)
-│   └── webview/         # Renderer (Frontend)
-├── resources/
-│   ├── electron.icns    # App icon
-│   └── notification.wav # Sound
-├── scripts/
-│   └── patch-copyright.js
-├── forge.config.js      # Electron Forge config
-└── package.json
+│   ├── codex-ultra/      # Core integration layer
+│   │   ├── bridge/       # IPC handlers, safety checks, sessions, and Git tools
+│   │   └── renderer/     # Frontend integration and UI styling
+│   ├── mac-arm64/        # Unpacked upstream assets (generated during sync)
+│   └── mac-x64/          # Unpacked upstream assets (generated during sync)
+├── scripts/              # Custom patching toolchain
+│   ├── patch-all.js      # Orchestrator to run all patches in sequence
+│   ├── patch-codex-ultra.js # Injects branding, IPC registration, and UI mode controls
+│   ├── patch-sunset.js   # Disables forced app sunset/updates
+│   ├── patch-devtools.js # Enables developer inspection tools
+│   ├── patch-i18n.js     # Patches language files and localization
+│   ├── fetch-msstore.js  # Fetches assets from Microsoft Store for Windows builds
+│   └── build-from-upstream.js # Main production packaging orchestrator
+├── test/
+│   └── codex-ultra/      # Verification and regression tests
+├── forge.config.js       # Electron Forge configuration
+└── package.json          # Node dependencies and project scripts
 ```
 
-## CI/CD
+---
 
-GitHub Actions automatically builds on:
-- Push to `master`
-- Tag `v*` → Creates draft release
+## 🚀 Getting Started
 
-## Credits
+### Prerequisites
 
-**© OpenAI · Cometix Space**
+- Node.js (v18 or higher recommended)
+- `npm` package manager
+- macOS: `plutil` (pre-installed) for `.plist` modifications during branding
 
-- [OpenAI Codex](https://github.com/openai/codex) - Original Codex CLI (Apache-2.0)
-- [Cometix Space](https://github.com/Haleclipse) - Cross-platform rebuild & [@cometix/codex](https://www.npmjs.com/package/@cometix/codex) binaries
-- [Electron Forge](https://www.electronforge.io/) - Build toolchain
+### Installation
 
-## License
+Clone the repository with submodules:
 
-This project rebuilds the Codex Desktop app for cross-platform distribution.
-Original Codex CLI by OpenAI is licensed under Apache-2.0.
+```bash
+git clone --recurse-submodules git@github.com:fanyafeng/CodexUltra.git
+cd CodexUltra
+npm install
+```
+
+---
+
+## 💻 Development & Syncing
+
+### Sync Upstream
+To synchronize and unpack the latest release assets from the upstream desktop application feed:
+
+```bash
+npm run sync
+```
+
+### Apply Patches
+All patching scripts under `scripts/` can be applied automatically:
+
+```bash
+# Run all patches across all platforms
+npm run patch
+
+# Run patches for macOS only
+npm run patch:mac
+
+# Run patches for Windows only
+npm run patch:win
+```
+
+### Start in Development Mode
+To boot up the patched Electron client in a local development environment:
+
+```bash
+npm run dev
+# or
+npm run start
+```
+
+---
+
+## 📦 Building and Packaging
+
+Production packaging extracts, patches, and rebuilds the final application bundles inside the `out/` directory.
+
+### macOS (Apple Silicon & Intel)
+```bash
+# Build for Apple Silicon (macOS arm64) - Default build
+npm run build
+
+# Build for Intel Mac (macOS x64)
+npm run build:mac-x64
+
+# Rebuild both macOS bundles
+npm run build:mac
+```
+
+### Windows (x64)
+```bash
+npm run build:win
+```
+
+### Linux (x64 & arm64)
+```bash
+npm run build:linux
+```
+
+---
+
+## 🧪 Testing and Verification
+
+Tests are written using Node's native test runner (`node:test`) to verify both core library logic and packaging compliance.
+
+Run all tests:
+```bash
+node --test test/codex-ultra/**/*.test.js
+```
+
+- **[bridge-core.test.js](file:///Users/pom/jihuo/CodexUltra/test/codex-ultra/bridge-core.test.js)**: Verifies secrets redaction, path traversal safety, workspace setup, and metadata storage.
+- **[packaging.test.js](file:///Users/pom/jihuo/CodexUltra/test/codex-ultra/packaging.test.js)**: Verifies that patches have been correctly applied to generated bundle outputs (such as user profile path changes in `bootstrap.js` and IPC bindings).
+
+---
+
+## 👥 Credits
+
+- **[OpenAI](https://github.com/openai)**: Creator of the original ChatGPT/Codex Desktop client.
+- **[Cometix Space (Haleclipse)](https://github.com/Haleclipse)**: Base cross-platform rebuilding framework and build toolchains.
+- **[fanyafeng](https://github.com/fanyafeng)**: CodexUltra customizations and active development.
+- **[Electron Forge](https://www.electronforge.io/)**: Packaging and distribution toolchain.
+
