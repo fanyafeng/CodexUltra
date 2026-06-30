@@ -1,5 +1,7 @@
 # CodexUltra
 
+[简体中文](README.zh-CN.md) | English
+
 `CodexUltra` is an enhanced rebuild of the official **OpenAI Codex Desktop Application** (available on the Microsoft Store as Product ID `9plm9xgg6vks` and macOS Sparkle feeds). It introduces custom branding, isolated workspace sessions, cloud-control bypasses, and integrates the **CodexPro Bridge Runtime** to enable advanced local filesystem integrations with OpenAI's agentic developer platform.
 
 ---
