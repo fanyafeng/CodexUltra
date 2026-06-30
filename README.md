@@ -135,8 +135,8 @@ Run all tests:
 node --test test/codex-ultra/**/*.test.js
 ```
 
-- **[bridge-core.test.js](file:///Users/pom/jihuo/CodexUltra/test/codex-ultra/bridge-core.test.js)**: Verifies secrets redaction, path traversal safety, workspace setup, and metadata storage.
-- **[packaging.test.js](file:///Users/pom/jihuo/CodexUltra/test/codex-ultra/packaging.test.js)**: Verifies that patches have been correctly applied to generated bundle outputs (such as user profile path changes in `bootstrap.js` and IPC bindings).
+- **[bridge-core.test.js](test/codex-ultra/bridge-core.test.js)**: Verifies secrets redaction, path traversal safety, workspace setup, and metadata storage.
+- **[packaging.test.js](test/codex-ultra/packaging.test.js)**: Verifies that patches have been correctly applied to generated bundle outputs (such as user profile path changes in `bootstrap.js` and IPC bindings).
 
 ---
 
@@ -146,5 +146,4 @@ node --test test/codex-ultra/**/*.test.js
 - **[Cometix Space (Haleclipse)](https://github.com/Haleclipse)**: Base cross-platform rebuilding framework and build toolchains.
 - **[fanyafeng](https://github.com/fanyafeng)**: CodexUltra customizations and active development.
 - **[Electron Forge](https://www.electronforge.io/)**: Packaging and distribution toolchain.
-
 

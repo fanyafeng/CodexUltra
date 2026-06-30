@@ -44,3 +44,4 @@ resources/codex
 resources/codex.exe
 .claude/
 .ai-bridge/
+.github/workflows/
