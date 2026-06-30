@@ -115,9 +115,24 @@ function rendererInjectionSource() {
   // CodexUltra integration: mode switch entrypoint
   const STYLE_ID = "codex-ultra-style";
   const CHATGPT_CONNECTORS_URL = "https://chatgpt.com/#settings/Connectors";
+  function isPublicGptServerUrl(url) {
+    try {
+      const parsed = new URL(String(url || "").trim());
+      return parsed.protocol === "https:" && /\\/mcp\\/?$/i.test(parsed.pathname) && !["localhost", "127.0.0.1"].includes(parsed.hostname);
+    } catch {
+      return false;
+    }
+  }
+  function readSavedGptServerUrl() {
+    const value = localStorage.getItem("codexUltra.gptServerUrl") || "";
+    if (!value) return "";
+    if (isPublicGptServerUrl(value)) return value;
+    localStorage.removeItem("codexUltra.gptServerUrl");
+    return "";
+  }
   const state = {
     mode: localStorage.getItem("codexUltra.mode") || "codex_execute",
-    gptServerUrl: localStorage.getItem("codexUltra.gptServerUrl") || "",
+    gptServerUrl: readSavedGptServerUrl(),
     bridgeSession: null,
     bridgeStart: null,
   };
@@ -182,8 +197,40 @@ function rendererInjectionSource() {
     }
     return "";
   }
+  function detectProjectName() {
+    const buttons = Array.from(document.querySelectorAll("button"));
+    function cleanProjectName(value) {
+      const text = String(value || "").replace(/^Change project:\\s*/i, "").trim();
+      if (!text || text.length > 80 || text.includes("/") || text.includes("\\\\")) return "";
+      if (["GPT规划", "Codex执行", "本地模式", "main", "不使用项目"].includes(text)) return "";
+      return text;
+    }
+    function buttonLabel(button) {
+      return [
+        button.getAttribute("aria-label"),
+        button.getAttribute("title"),
+        visibleText(button),
+      ].find((value) => typeof value === "string" && value.trim()) || "";
+    }
+    for (const button of buttons) {
+      const label = buttonLabel(button);
+      if (/Change project:/i.test(label)) {
+        const projectName = cleanProjectName(label);
+        if (projectName) return projectName;
+      }
+    }
+    const bodyText = visibleText(document.body);
+    const questionMatch = bodyText.match(/我们应该在\\s+(.+?)\\s+中构建什么[？?]?/) || bodyText.match(/What should we build in\\s+(.+?)\\?/i);
+    return cleanProjectName(questionMatch?.[1]);
+  }
   function rememberGptServerUrl(url) {
     const value = String(url || "").trim();
+    if (value && !isPublicGptServerUrl(value)) {
+      state.gptServerUrl = "";
+      localStorage.removeItem("codexUltra.gptServerUrl");
+      updateModeTargetDisplay();
+      return "";
+    }
     state.gptServerUrl = value;
     if (value) localStorage.setItem("codexUltra.gptServerUrl", value);
     else localStorage.removeItem("codexUltra.gptServerUrl");
@@ -194,18 +241,24 @@ function rendererInjectionSource() {
     if (state.gptServerUrl) return state.gptServerUrl;
     const api = getCodexUltraApi();
     const workspacePath = detectWorkspacePath();
-    if (!api || !workspacePath) {
+    const projectName = detectProjectName();
+    if (!api || (!workspacePath && !projectName)) {
       if (statusElement) statusElement.textContent = "未自动找到工作区，请粘贴 CodexPro Server URL。";
       return "";
     }
     if (!state.bridgeSession) {
       if (statusElement) statusElement.textContent = "正在准备本地桥接会话...";
-      state.bridgeSession = await api.invoke("codexUltra:getOrCreateBridgeSession", { workspacePath });
+      state.bridgeSession = await api.invoke("codexUltra:getOrCreateBridgeSession", {
+        workspacePath,
+        projectName,
+      });
+      if (state.bridgeSession?.workspacePath) localStorage.setItem("codexUltra.workspacePath", state.bridgeSession.workspacePath);
     }
     if (!state.bridgeStart) {
-      if (statusElement) statusElement.textContent = "正在启动 CodexPro bridge...";
+      if (statusElement) statusElement.textContent = "正在启动 CodexPro bridge 和 Cloudflare tunnel...";
       state.bridgeStart = api.invoke("codexUltra:startGptBridge", {
-        workspacePath,
+        workspacePath: state.bridgeSession?.workspacePath || workspacePath,
+        projectName,
         bridgeSessionId: state.bridgeSession.id,
       }).catch((error) => {
         state.bridgeStart = null;
@@ -213,7 +266,7 @@ function rendererInjectionSource() {
       });
     }
     const result = await state.bridgeStart;
-    const serverUrl = result?.serverUrl || result?.publicUrl || result?.localUrl || "";
+    const serverUrl = result?.publicUrl || result?.serverUrl || "";
     if (serverUrl) return rememberGptServerUrl(serverUrl);
     if (statusElement) statusElement.textContent = result?.error || "未能自动生成 Server URL，请手动粘贴。";
     return "";

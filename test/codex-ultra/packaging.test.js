@@ -99,6 +99,33 @@ test("renderer prompts for ChatGPT Server URL when GPT planning has no detected 
   assert.match(renderer, /codexUltra\.gptServerUrl/);
   assert.match(renderer, /https:\/\/chatgpt\.com\/#settings\/Connectors/);
   assert.match(renderer, /codexUltra:startGptBridge/);
+  assert.match(renderer, /function detectProjectName/);
+  assert.match(renderer, /projectName/);
+  assert.match(renderer, /Cloudflare tunnel/);
+  assert.match(renderer, /function isPublicGptServerUrl/);
+  assert.match(renderer, /function readSavedGptServerUrl/);
+  assert.match(renderer, /localStorage\.removeItem\("codexUltra\.gptServerUrl"\)/);
+  assert.match(renderer, /result\?\.publicUrl \|\| result\?\.serverUrl/);
+});
+
+test("vendored CodexPro always prints the full ChatGPT Server URL for CodexUltra to capture", () => {
+  const cli = fs.readFileSync(path.join(root, "vendor/codexpro/scripts/codexpro.mjs"), "utf8");
+  const start = cli.indexOf("function printConnectorBlock");
+  const end = cli.indexOf("function printControlHelp");
+  assert.notEqual(start, -1, "CodexPro CLI must define printConnectorBlock");
+  assert.notEqual(end, -1, "CodexPro CLI must define printControlHelp after printConnectorBlock");
+
+  const connectorBlock = cli.slice(start, end);
+  assert.match(connectorBlock, /Server URL: \$\{serverUrl\}/);
+});
+
+test("renderer project detection avoids arbitrary sidebar buttons", () => {
+  const renderer = fs.readFileSync(path.join(root, "src/mac-arm64/_asar/webview/assets/codex-ultra-renderer.js"), "utf8");
+
+  assert.match(renderer, /function detectProjectName/);
+  assert.match(renderer, /function buttonLabel/);
+  assert.match(renderer, /Change project:/);
+  assert.doesNotMatch(renderer, /buttons\.map\(visibleText\)/);
 });
 
 test("patched preload exposes a restricted CodexUltra IPC bridge", () => {
@@ -108,6 +135,14 @@ test("patched preload exposes a restricted CodexUltra IPC bridge", () => {
   assert.match(preload, /exposeInMainWorld\(`codexUltra`/);
   assert.match(preload, /channel\.startsWith\(`codexUltra:`\)/);
   assert.match(preload, /ipcRenderer\.invoke\(channel, payload\)/);
+});
+
+test("patched main IPC can resolve workspace paths from the visible project name", () => {
+  const ipc = fs.readFileSync(path.join(root, "src/codex-ultra/bridge/ipc/codexUltraIpcMain.js"), "utf8");
+
+  assert.match(ipc, /resolveWorkspacePath/);
+  assert.match(ipc, /codexUltra:resolveWorkspacePath/);
+  assert.match(ipc, /withResolvedWorkspacePath/);
 });
 
 test("renderer mode switch install is mutation safe", () => {

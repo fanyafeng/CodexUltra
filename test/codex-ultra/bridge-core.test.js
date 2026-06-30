@@ -7,10 +7,13 @@ const test = require("node:test");
 const { redactSecrets } = require("../../src/codex-ultra/bridge/security/redactSecrets");
 const { assertInsideWorkspace, safeJoin } = require("../../src/codex-ultra/bridge/workspace/pathSafety");
 const { ensureBridgeDir, getGitStatus } = require("../../src/codex-ultra/bridge/workspace/gitTools");
+const { resolveWorkspacePath } = require("../../src/codex-ultra/bridge/workspace/resolveWorkspacePath");
 const { detectSourceRuntime } = require("../../src/codex-ultra/bridge/codexpro/codexProRuntimeDetector");
-const { parseServerUrl } = require("../../src/codex-ultra/bridge/codexpro/codexProProcessManager");
+const { buildCodexProStartArgs, parseServerUrl, resolveNodeExecutable } = require("../../src/codex-ultra/bridge/codexpro/codexProProcessManager");
 const { ensureCodexExecuteModel, readCodexModelConfig } = require("../../src/codex-ultra/bridge/config/codexConfig");
 const { getOrCreateBridgeSession } = require("../../src/codex-ultra/bridge/session/bridgeSessionStore");
+
+const root = path.resolve(__dirname, "../..");
 
 test("redactSecrets removes common API keys and URL tokens", () => {
   const input = [
@@ -33,6 +36,41 @@ test("parseServerUrl preserves the token needed by ChatGPT connector setup", () 
   const url = "http://127.0.0.1:43117/mcp?codexpro_token=secret-token-123&ok=1";
 
   assert.equal(parseServerUrl(`Server URL: ${url}`), url);
+});
+
+test("parseServerUrl prefers public ChatGPT Server URLs over local status URLs", () => {
+  const localUrl = "http://127.0.0.1:8787/?codexpro_token=local-token";
+  const publicUrl = "https://example.trycloudflare.com/mcp?codexpro_token=public-token";
+
+  assert.equal(parseServerUrl(`Local status: ${localUrl}\nServer URL: ${publicUrl}`), publicUrl);
+});
+
+test("CodexPro bridge starts with Cloudflare quick tunnel for ChatGPT access", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "codex-ultra-cloudflare-"));
+  const args = buildCodexProStartArgs({
+    runtimePath: "/tmp/codexpro/scripts/codexpro.mjs",
+    workspacePath: workspace,
+  });
+
+  assert.deepEqual(args.slice(0, 2), ["/tmp/codexpro/scripts/codexpro.mjs", "start"]);
+  assert.match(args.join(" "), /--mode handoff/);
+  assert.match(args.join(" "), /--tunnel cloudflare/);
+  assert.doesNotMatch(args.join(" "), /--no-copy-url/);
+  assert.doesNotMatch(args.join(" "), /--no-open-chatgpt/);
+  assert.doesNotMatch(args.join(" "), /--no-auth/);
+});
+
+test("CodexPro bridge uses bundled Node instead of the Electron executable", () => {
+  const resourcesPath = fs.mkdtempSync(path.join(os.tmpdir(), "codex-ultra-resources-"));
+  const nodePath = path.join(resourcesPath, "cua_node", "bin", process.platform === "win32" ? "node.exe" : "node");
+  fs.mkdirSync(path.dirname(nodePath), { recursive: true });
+  fs.writeFileSync(nodePath, "");
+
+  assert.equal(resolveNodeExecutable({ resourcesPath, execPath: "/Applications/CodexUltra.app/Contents/MacOS/CodexUltra-bin" }), nodePath);
+});
+
+test("resolveWorkspacePath can use the visible project name as a fallback", () => {
+  assert.equal(resolveWorkspacePath({ projectName: "CodexUltra" }), root);
 });
 
 test("path safety rejects traversal outside workspace", () => {
