@@ -8,6 +8,7 @@ const { redactSecrets } = require("../../src/codex-ultra/bridge/security/redactS
 const { assertInsideWorkspace, safeJoin } = require("../../src/codex-ultra/bridge/workspace/pathSafety");
 const { ensureBridgeDir, getGitStatus } = require("../../src/codex-ultra/bridge/workspace/gitTools");
 const { detectSourceRuntime } = require("../../src/codex-ultra/bridge/codexpro/codexProRuntimeDetector");
+const { parseServerUrl } = require("../../src/codex-ultra/bridge/codexpro/codexProProcessManager");
 const { ensureCodexExecuteModel, readCodexModelConfig } = require("../../src/codex-ultra/bridge/config/codexConfig");
 const { getOrCreateBridgeSession } = require("../../src/codex-ultra/bridge/session/bridgeSessionStore");
 
@@ -26,6 +27,12 @@ test("redactSecrets removes common API keys and URL tokens", () => {
   assert.doesNotMatch(output, /secret-api-key-123456/);
   assert.doesNotMatch(output, /secret-token-123/);
   assert.match(output, /codexpro_token=\[REDACTED_SECRET\]/);
+});
+
+test("parseServerUrl preserves the token needed by ChatGPT connector setup", () => {
+  const url = "http://127.0.0.1:43117/mcp?codexpro_token=secret-token-123&ok=1";
+
+  assert.equal(parseServerUrl(`Server URL: ${url}`), url);
 });
 
 test("path safety rejects traversal outside workspace", () => {

@@ -114,7 +114,13 @@ function rendererInjectionSource() {
 ;(() => {
   // CodexUltra integration: mode switch entrypoint
   const STYLE_ID = "codex-ultra-style";
-  const state = { mode: localStorage.getItem("codexUltra.mode") || "codex_execute" };
+  const CHATGPT_CONNECTORS_URL = "https://chatgpt.com/#settings/Connectors";
+  const state = {
+    mode: localStorage.getItem("codexUltra.mode") || "codex_execute",
+    gptServerUrl: localStorage.getItem("codexUltra.gptServerUrl") || "",
+    bridgeSession: null,
+    bridgeStart: null,
+  };
   let installScheduled = false;
   let lastModeTarget = null;
   let cachedGptAccount = null;
@@ -122,7 +128,26 @@ function rendererInjectionSource() {
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement("style");
     style.id = STYLE_ID;
-    style.textContent = ".codex-ultra-mode-slot{position:fixed;display:inline-flex;align-items:center;justify-content:center;z-index:20;pointer-events:auto;min-width:0}.codex-ultra-mode-switch{display:inline-flex;gap:1px;align-items:center;height:28px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:7px;padding:2px;background:color-mix(in srgb,currentColor 5%,transparent);white-space:nowrap;box-sizing:border-box}.codex-ultra-mode-switch button{height:22px;border:0;background:transparent;color:inherit;border-radius:5px;padding:0 8px;font-size:13px;font-weight:500;line-height:22px;cursor:pointer;white-space:nowrap}.codex-ultra-mode-switch button.active{background:color-mix(in srgb,currentColor 16%,transparent);font-weight:650}.codex-ultra-gpt-account{position:fixed;z-index:21;display:none;pointer-events:none;min-width:84px;max-width:150px;white-space:nowrap;overflow:hidden;text-align:left;color:inherit}.codex-ultra-gpt-account-title{display:block;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:650;line-height:14px}.codex-ultra-gpt-account-desc{display:block;overflow:hidden;text-overflow:ellipsis;font-size:10px;font-weight:450;line-height:12px;color:color-mix(in srgb,currentColor 62%,transparent)}";
+    style.textContent = [
+      ".codex-ultra-mode-slot{position:fixed;display:inline-flex;align-items:center;justify-content:center;z-index:20;pointer-events:auto;min-width:0}",
+      ".codex-ultra-mode-switch{display:inline-flex;gap:1px;align-items:center;height:28px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:7px;padding:2px;background:color-mix(in srgb,currentColor 5%,transparent);white-space:nowrap;box-sizing:border-box}",
+      ".codex-ultra-mode-switch button{height:22px;border:0;background:transparent;color:inherit;border-radius:5px;padding:0 8px;font-size:13px;font-weight:500;line-height:22px;cursor:pointer;white-space:nowrap}",
+      ".codex-ultra-mode-switch button.active{background:color-mix(in srgb,currentColor 16%,transparent);font-weight:650}",
+      ".codex-ultra-gpt-account{position:fixed;z-index:21;display:none;pointer-events:auto;min-width:84px;max-width:150px;white-space:nowrap;overflow:hidden;text-align:left;color:inherit;cursor:pointer}",
+      ".codex-ultra-gpt-account-title{display:block;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:650;line-height:14px}",
+      ".codex-ultra-gpt-account-desc{display:block;overflow:hidden;text-overflow:ellipsis;font-size:10px;font-weight:450;line-height:12px;color:color-mix(in srgb,currentColor 62%,transparent)}",
+      ".codex-ultra-gpt-account-login .codex-ultra-gpt-account-title{color:rgb(37,99,235)}",
+      ".codex-ultra-gpt-login-backdrop{position:fixed;inset:0;z-index:200000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.28);backdrop-filter:blur(2px)}",
+      ".codex-ultra-gpt-login-dialog{width:min(520px,calc(100vw - 32px));border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:8px;background:Canvas;color:CanvasText;box-shadow:0 20px 64px rgba(0,0,0,.28);padding:16px;box-sizing:border-box}",
+      ".codex-ultra-gpt-login-dialog h2{margin:0 0 6px;font-size:16px;line-height:22px;font-weight:650}",
+      ".codex-ultra-gpt-login-dialog p{margin:0 0 12px;font-size:13px;line-height:18px;color:color-mix(in srgb,currentColor 70%,transparent)}",
+      ".codex-ultra-gpt-login-dialog label{display:block;margin:0 0 6px;font-size:12px;line-height:16px;font-weight:600}",
+      ".codex-ultra-gpt-login-dialog input{width:100%;height:34px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:6px;background:color-mix(in srgb,Canvas 94%,currentColor);color:inherit;padding:0 10px;font-family:inherit;font-size:13px;box-sizing:border-box}",
+      ".codex-ultra-gpt-login-status{min-height:18px;margin-top:8px;font-size:12px;line-height:18px;color:color-mix(in srgb,currentColor 64%,transparent)}",
+      ".codex-ultra-gpt-login-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}",
+      ".codex-ultra-gpt-login-actions button{height:30px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:6px;background:color-mix(in srgb,currentColor 6%,transparent);color:inherit;padding:0 11px;font-family:inherit;font-size:13px;cursor:pointer}",
+      ".codex-ultra-gpt-login-actions button[data-primary=true]{background:rgb(37,99,235);border-color:rgb(37,99,235);color:white}",
+    ].join("");
     document.head.appendChild(style);
   }
   function visibleText(element) {
@@ -131,6 +156,73 @@ function rendererInjectionSource() {
   function sendBridgeMessage(message) {
     const event = new CustomEvent("codex-ultra-bridge-message", { detail: message });
     window.dispatchEvent(event);
+  }
+  function getCodexUltraApi() {
+    return window.codexUltra && typeof window.codexUltra.invoke === "function" ? window.codexUltra : null;
+  }
+  function detectWorkspacePath() {
+    const candidates = [
+      window.__CODEx_WORKSPACE_PATH__,
+      window.__CODEX_WORKSPACE_PATH__,
+      window.codexWorkspacePath,
+      window.workspacePath,
+      document.body?.dataset?.workspacePath,
+      document.querySelector("[data-workspace-path]")?.getAttribute("data-workspace-path"),
+      document.querySelector("[data-project-path]")?.getAttribute("data-project-path"),
+      localStorage.getItem("codexUltra.workspacePath"),
+    ];
+    const text = visibleText(document.body);
+    const pathMatch = text.match(/(?:\\/Users\\/[^\\n\\r\\t ]+|\\/Volumes\\/[^\\n\\r\\t ]+|\\/private\\/[^\\n\\r\\t ]+|\\/tmp\\/[^\\n\\r\\t ]+)/);
+    if (pathMatch) candidates.push(pathMatch[0]);
+    const found = candidates.find((value) => typeof value === "string" && value.trim().startsWith("/"));
+    if (found) {
+      const workspacePath = found.trim();
+      localStorage.setItem("codexUltra.workspacePath", workspacePath);
+      return workspacePath;
+    }
+    return "";
+  }
+  function rememberGptServerUrl(url) {
+    const value = String(url || "").trim();
+    state.gptServerUrl = value;
+    if (value) localStorage.setItem("codexUltra.gptServerUrl", value);
+    else localStorage.removeItem("codexUltra.gptServerUrl");
+    updateModeTargetDisplay();
+    return value;
+  }
+  async function ensureGptBridgeServerUrl(statusElement) {
+    if (state.gptServerUrl) return state.gptServerUrl;
+    const api = getCodexUltraApi();
+    const workspacePath = detectWorkspacePath();
+    if (!api || !workspacePath) {
+      if (statusElement) statusElement.textContent = "未自动找到工作区，请粘贴 CodexPro Server URL。";
+      return "";
+    }
+    if (!state.bridgeSession) {
+      if (statusElement) statusElement.textContent = "正在准备本地桥接会话...";
+      state.bridgeSession = await api.invoke("codexUltra:getOrCreateBridgeSession", { workspacePath });
+    }
+    if (!state.bridgeStart) {
+      if (statusElement) statusElement.textContent = "正在启动 CodexPro bridge...";
+      state.bridgeStart = api.invoke("codexUltra:startGptBridge", {
+        workspacePath,
+        bridgeSessionId: state.bridgeSession.id,
+      }).catch((error) => {
+        state.bridgeStart = null;
+        throw error;
+      });
+    }
+    const result = await state.bridgeStart;
+    const serverUrl = result?.serverUrl || result?.publicUrl || result?.localUrl || "";
+    if (serverUrl) return rememberGptServerUrl(serverUrl);
+    if (statusElement) statusElement.textContent = result?.error || "未能自动生成 Server URL，请手动粘贴。";
+    return "";
+  }
+  function copyText(value) {
+    return navigator.clipboard?.writeText(value).catch(() => {}) || Promise.resolve();
+  }
+  function openChatGptConnectors() {
+    window.open(CHATGPT_CONNECTORS_URL, "_blank", "noopener,noreferrer");
   }
   function isVisible(element) {
     if (!element || !(element instanceof Element)) return false;
@@ -290,13 +382,106 @@ function rendererInjectionSource() {
       const title = beforeEmail && beforeEmail.length <= 40 ? beforeEmail : email.split("@")[0];
       return { title, desc: email };
     }
-    return { title: "GPT规划", desc: "未检测到邮箱" };
+    if (state.gptServerUrl) return { title: "GPT规划", desc: "Server URL 已配置", needsLogin: true };
+    return { title: "登录 ChatGPT", desc: "配置 Server URL", needsLogin: true };
+  }
+  function closeGptServerUrlDialog() {
+    document.querySelector(".codex-ultra-gpt-login-backdrop")?.remove();
+  }
+  function showGptServerUrlDialog() {
+    ensureStyle();
+    let backdrop = document.querySelector(".codex-ultra-gpt-login-backdrop");
+    if (backdrop) {
+      backdrop.querySelector("input")?.focus();
+      return;
+    }
+    backdrop = document.createElement("div");
+    backdrop.className = "codex-ultra-gpt-login-backdrop";
+    backdrop.addEventListener("click", (event) => {
+      if (event.target === backdrop) closeGptServerUrlDialog();
+    });
+    const dialog = document.createElement("div");
+    dialog.className = "codex-ultra-gpt-login-dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    const title = document.createElement("h2");
+    title.textContent = "登录 ChatGPT";
+    const body = document.createElement("p");
+    body.textContent = "CodexPro 的做法是把本地 bridge 的 Server URL 填到 ChatGPT Connectors。粘贴或复制下面的 URL，然后在 ChatGPT 设置里创建连接。";
+    const label = document.createElement("label");
+    label.textContent = "Server URL";
+    const input = document.createElement("input");
+    input.type = "url";
+    input.placeholder = "https://.../mcp?codexpro_token=...";
+    input.value = state.gptServerUrl;
+    const status = document.createElement("div");
+    status.className = "codex-ultra-gpt-login-status";
+    status.textContent = state.gptServerUrl ? "Server URL 已保存。" : "正在尝试自动生成 Server URL...";
+    const actions = document.createElement("div");
+    actions.className = "codex-ultra-gpt-login-actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "取消";
+    cancel.addEventListener("click", closeGptServerUrlDialog);
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.textContent = "复制 URL";
+    copy.addEventListener("click", () => {
+      const value = rememberGptServerUrl(input.value);
+      if (!value) {
+        status.textContent = "请先粘贴 Server URL。";
+        return;
+      }
+      copyText(value).then(() => {
+        status.textContent = "已复制 Server URL。";
+      });
+    });
+    const openSettings = document.createElement("button");
+    openSettings.type = "button";
+    openSettings.textContent = "打开设置";
+    openSettings.addEventListener("click", openChatGptConnectors);
+    const confirm = document.createElement("button");
+    confirm.type = "button";
+    confirm.dataset.primary = "true";
+    confirm.textContent = "确定";
+    confirm.addEventListener("click", () => {
+      rememberGptServerUrl(input.value);
+      openChatGptConnectors();
+      closeGptServerUrlDialog();
+    });
+    input.addEventListener("input", () => rememberGptServerUrl(input.value));
+    actions.append(cancel, copy, openSettings, confirm);
+    dialog.append(title, body, label, input, status, actions);
+    backdrop.appendChild(dialog);
+    document.body.appendChild(backdrop);
+    input.focus();
+    ensureGptBridgeServerUrl(status).then((url) => {
+      if (!url) return;
+      input.value = url;
+      status.textContent = "Server URL 已生成，可复制后在 ChatGPT 设置中粘贴。";
+    }).catch((error) => {
+      status.textContent = "自动生成失败：" + (error?.message || String(error));
+    });
   }
   function ensureGptAccountOverlay() {
     let account = document.querySelector(".codex-ultra-gpt-account");
     if (account) return account;
     account = document.createElement("div");
     account.className = "codex-ultra-gpt-account";
+    account.setAttribute("role", "button");
+    account.tabIndex = 0;
+    account.title = "配置 ChatGPT Server URL";
+    account.addEventListener("click", () => {
+      const accountInfo = readGptAccount();
+      if (accountInfo.needsLogin) showGptServerUrlDialog();
+    });
+    account.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const accountInfo = readGptAccount();
+      if (!accountInfo.needsLogin) return;
+      event.preventDefault();
+      showGptServerUrlDialog();
+    });
     const title = document.createElement("span");
     title.className = "codex-ultra-gpt-account-title";
     const desc = document.createElement("span");
@@ -326,10 +511,15 @@ function rendererInjectionSource() {
     const desc = accountOverlay.querySelector(".codex-ultra-gpt-account-desc");
     if (title) title.textContent = account.title;
     if (desc) desc.textContent = account.desc;
+    accountOverlay.classList.toggle("codex-ultra-gpt-account-login", Boolean(account.needsLogin));
     accountOverlay.style.left = Math.round(modelRect.left) + "px";
     accountOverlay.style.top = Math.round(modelRect.top + (modelRect.height - 26) / 2) + "px";
     accountOverlay.style.width = Math.round(Math.max(84, modelRect.width)) + "px";
     accountOverlay.style.display = "block";
+    if (account.needsLogin && !state.gptServerUrl && !sessionStorage.getItem("codexUltra.gptLoginPromptShown")) {
+      sessionStorage.setItem("codexUltra.gptLoginPromptShown", "1");
+      setTimeout(showGptServerUrlDialog, 0);
+    }
   }
   function positionModeSlot(slot, composer, modelSelector, contextInfoButton) {
     const composerRect = composer.getBoundingClientRect();
@@ -397,7 +587,12 @@ function rendererInjectionSource() {
     event.preventDefault();
     event.stopImmediatePropagation();
     navigator.clipboard?.writeText("# Handoff to GPT\\n\\n" + userInput).catch(() => {});
-    window.open("https://chatgpt.com/", "_blank", "noopener,noreferrer");
+    if (!state.gptServerUrl) {
+      showGptServerUrlDialog();
+      sendBridgeMessage({ mode: "bridge", content: "请先配置 ChatGPT Server URL。" });
+      return;
+    }
+    openChatGptConnectors();
     sendBridgeMessage({ mode: "bridge", content: "已生成 GPT 规划请求，并复制到剪贴板。" });
   }, true);
   new MutationObserver(scheduleInstall).observe(document.documentElement, { childList: true, subtree: true });

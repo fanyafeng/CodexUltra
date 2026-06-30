@@ -89,6 +89,18 @@ test("renderer shows GPT account title and email when planning mode is selected"
   assert.match(renderer, /modelSelector\.style\.visibility = state\.mode === "gpt_plan" \? "hidden" : ""/);
 });
 
+test("renderer prompts for ChatGPT Server URL when GPT planning has no detected account", () => {
+  const renderer = fs.readFileSync(path.join(root, "src/mac-arm64/_asar/webview/assets/codex-ultra-renderer.js"), "utf8");
+
+  assert.match(renderer, /codex-ultra-gpt-login-dialog/);
+  assert.match(renderer, /function showGptServerUrlDialog/);
+  assert.match(renderer, /登录 ChatGPT/);
+  assert.match(renderer, /配置 Server URL/);
+  assert.match(renderer, /codexUltra\.gptServerUrl/);
+  assert.match(renderer, /https:\/\/chatgpt\.com\/#settings\/Connectors/);
+  assert.match(renderer, /codexUltra:startGptBridge/);
+});
+
 test("patched preload exposes a restricted CodexUltra IPC bridge", () => {
   const preload = fs.readFileSync(path.join(root, "src/mac-arm64/_asar/.vite/build/preload.js"), "utf8");
 
