@@ -1,6 +1,16 @@
 # CodexUltra
 
-`CodexUltra` is an enhanced, cross-platform rebuild of the official **OpenAI Codex Desktop Application** (available on the Microsoft Store as Product ID `9plm9xgg6vks` and macOS Sparkle feeds). It introduces custom branding, isolated workspace sessions, cloud-control bypasses, and integrates the **CodexPro Bridge Runtime** to enable advanced local filesystem integrations with OpenAI's agentic developer platform.
+`CodexUltra` is an enhanced rebuild of the official **OpenAI Codex Desktop Application** (available on the Microsoft Store as Product ID `9plm9xgg6vks` and macOS Sparkle feeds). It introduces custom branding, isolated workspace sessions, cloud-control bypasses, and integrates the **CodexPro Bridge Runtime** to enable advanced local filesystem integrations with OpenAI's agentic developer platform.
+
+---
+
+## 💻 Supported Platforms
+
+| Platform | Architecture | Status |
+|----------|--------------|--------|
+| macOS    | x64, arm64   | ✅ Supported |
+| Windows  | x64          | ⏳ In Development |
+| Linux    | x64, arm64   | ⏳ In Development |
 
 ---
 
@@ -114,15 +124,9 @@ npm run build:mac-x64
 npm run build:mac
 ```
 
-### Windows (x64)
-```bash
-npm run build:win
-```
-
-### Linux (x64 & arm64)
-```bash
-npm run build:linux
-```
+### Windows & Linux — ⏳ In Development
+> [!NOTE]
+> Windows (`npm run build:win`) and Linux (`npm run build:linux`) build commands are defined in `package.json` but are temporarily disabled or in development.
 
 ---
 
