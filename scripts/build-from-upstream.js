@@ -17,6 +17,8 @@ const { execSync } = require("child_process");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const SRC_DIR = path.join(PROJECT_ROOT, "src");
 const OUT_DIR = path.join(PROJECT_ROOT, "out");
+const CODEX_ULTRA_SRC = path.join(PROJECT_ROOT, "src", "codex-ultra");
+const CODEXPRO_SRC = path.join(PROJECT_ROOT, "vendor", "codexpro");
 
 const TARGET_TRIPLE_MAP = {
   "mac-arm64": "aarch64-apple-darwin",
@@ -47,6 +49,100 @@ function copyRecursive(src, dest) {
     }
   }
   return count;
+}
+
+function copyCodexUltraResources(resourcesDir) {
+  if (fs.existsSync(CODEX_ULTRA_SRC)) {
+    const dest = path.join(resourcesDir, "codex-ultra");
+    if (fs.existsSync(dest)) fs.rmSync(dest, { recursive: true });
+    copyRecursive(CODEX_ULTRA_SRC, dest);
+    console.log("   [codex-ultra] bridge layer copied");
+  }
+  if (fs.existsSync(CODEXPRO_SRC)) {
+    const dest = path.join(resourcesDir, "vendor", "codexpro");
+    if (fs.existsSync(dest)) fs.rmSync(dest, { recursive: true });
+    copyRecursive(CODEXPRO_SRC, dest);
+    console.log("   [codexpro] source runtime copied");
+  } else {
+    console.log("   [!] vendor/codexpro missing; build will not include CodexPro runtime");
+  }
+}
+
+function renameMacAppBundle(outApp) {
+  const infoPlist = path.join(outApp, "Contents", "Info.plist");
+  if (!fs.existsSync(infoPlist)) return;
+  const replacements = [
+    ["CFBundleName", "CodexUltra"],
+    ["CFBundleDisplayName", "CodexUltra"],
+    ["CFBundleExecutable", "CodexUltra"],
+    ["CFBundleIdentifier", "com.fanyafeng.codexultra"],
+    ["BundleSigningBaseName", "CodexUltra"],
+    ["CrProductDirName", "CodexUltra"],
+  ];
+  for (const [key, value] of replacements) {
+    try { execSync(`plutil -replace ${key} -string "${value}" "${infoPlist}"`, { stdio: "pipe" }); } catch {}
+  }
+  try { execSync(`plutil -replace CFBundleURLTypes.0.CFBundleURLName -string "CodexUltra" "${infoPlist}"`, { stdio: "pipe" }); } catch {}
+  try { execSync(`plutil -replace CFBundleURLTypes.0.CFBundleURLSchemes -json '["codexultra"]' "${infoPlist}"`, { stdio: "pipe" }); } catch {}
+  patchMacPlistIdentifiers(outApp);
+  const macosDir = path.join(outApp, "Contents", "MacOS");
+  const oldExe = path.join(macosDir, "Codex");
+  const launcher = path.join(macosDir, "CodexUltra");
+  const binary = path.join(macosDir, "CodexUltra-bin");
+  if (fs.existsSync(oldExe) && !fs.existsSync(binary)) fs.renameSync(oldExe, binary);
+  else if (fs.existsSync(launcher) && !fs.existsSync(binary)) fs.renameSync(launcher, binary);
+  writeCodexUltraLauncher(launcher);
+}
+
+function writeCodexUltraLauncher(launcherPath) {
+  const source = `#!/bin/sh
+set -eu
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -n "\${CODEX_ELECTRON_USER_DATA_PATH:-}" ]; then
+  USER_DATA_DIR="$CODEX_ELECTRON_USER_DATA_PATH"
+else
+  USER_DATA_DIR="$HOME/Library/Application Support/CodexUltra"
+fi
+
+HAS_USER_DATA_DIR=0
+for arg in "$@"; do
+  case "$arg" in
+    --user-data-dir|--user-data-dir=*)
+      HAS_USER_DATA_DIR=1
+      ;;
+  esac
+done
+
+if [ "$HAS_USER_DATA_DIR" = "1" ]; then
+  exec "$SELF_DIR/CodexUltra-bin" "$@"
+fi
+
+mkdir -p "$USER_DATA_DIR"
+exec "$SELF_DIR/CodexUltra-bin" "--user-data-dir=$USER_DATA_DIR" "$@"
+`;
+  fs.writeFileSync(launcherPath, source, { mode: 0o755 });
+  fs.chmodSync(launcherPath, 0o755);
+}
+
+function patchMacPlistIdentifiers(outApp) {
+  const plistFiles = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/(^|-)Info\.plist$/.test(entry.name)) plistFiles.push(full);
+    }
+  };
+  walk(path.join(outApp, "Contents"));
+  for (const plist of plistFiles) {
+    try {
+      const id = execSync(`plutil -extract CFBundleIdentifier raw "${plist}"`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+      if (id.includes("com.openai.codex")) {
+        execSync(`plutil -replace CFBundleIdentifier -string "${id.replace("com.openai.codex", "com.fanyafeng.codexultra")}" "${plist}"`, { stdio: "pipe" });
+      }
+    } catch {}
+  }
 }
 
 function resolveCodexVendor(platform) {
@@ -139,9 +235,10 @@ function buildMac(platform) {
   // 2. Copy .app to output (ditto preserves symlinks + resource forks)
   const outAppDir = path.join(OUT_DIR, platform);
   clearDir(outAppDir);
-  const outApp = path.join(outAppDir, "Codex.app");
-  console.log("   [copy] Codex.app -> out/");
+  const outApp = path.join(outAppDir, "CodexUltra.app");
+  console.log("   [copy] Codex.app -> CodexUltra.app");
   execSync(`ditto "${appPath}" "${outApp}"`);
+  renameMacAppBundle(outApp);
 
   const resourcesDir = path.join(outApp, "Contents", "Resources");
 
@@ -164,6 +261,9 @@ function buildMac(platform) {
   // 6. Replace codex CLI
   replaceCodex(platform, resourcesDir, "codex");
 
+  // 6b. Bundle CodexUltra bridge layer and CodexPro source runtime.
+  copyCodexUltraResources(resourcesDir);
+
   // 7. Ad-hoc re-sign (prevents "damaged app" Gatekeeper error)
   console.log("   [codesign] ad-hoc signing");
   try {
@@ -175,12 +275,16 @@ function buildMac(platform) {
 
   // 8. Create DMG
   const version = getVersion(asarDir);
-  const dmgName = `Codex-${platform}-${version}.dmg`;
+  const dmgName = `CodexUltra-${platform}-${version}.dmg`;
   const dmgPath = path.join(OUT_DIR, dmgName);
   console.log(`   [dmg] ${dmgName}`);
-  execSync(`hdiutil create -volname Codex -srcfolder "${outAppDir}" -ov -format UDZO "${dmgPath}"`, { stdio: "pipe" });
+  execSync(`hdiutil create -volname CodexUltra -srcfolder "${outAppDir}" -ov -format UDZO "${dmgPath}"`, { stdio: "pipe" });
   const sizeMB = (fs.statSync(dmgPath).size / 1048576).toFixed(1);
   console.log(`   [ok] ${dmgPath} (${sizeMB} MB)`);
+
+  const zipPath = path.join(OUT_DIR, `CodexUltra-${platform}-${version}.zip`);
+  console.log(`   [zip] ${path.basename(zipPath)}`);
+  execSync(`ditto -c -k --sequesterRsrc --keepParent "${outApp}" "${zipPath}"`, { stdio: "pipe" });
 }
 
 // ─── Windows build ──────────────────────────────────────────────

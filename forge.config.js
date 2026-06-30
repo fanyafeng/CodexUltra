@@ -4,9 +4,9 @@ const fs = require("fs");
 
 module.exports = {
   packagerConfig: {
-    name: "Codex",
-    executableName: "Codex",
-    appBundleId: "com.openai.codex",
+    name: "CodexUltra",
+    executableName: "CodexUltra",
+    appBundleId: "com.fanyafeng.codexultra",
     icon: "./resources/electron",
     // Build mode is set by prepare-src.js via src/.build-mode marker file.
     // "upstream-asar": mac/win — we provide pre-built app.asar, forge skips ASAR packing.
@@ -50,7 +50,7 @@ module.exports = {
     },
     win32metadata: {
       CompanyName: "OpenAI",
-      ProductName: "Codex",
+      ProductName: "CodexUltra",
     },
   },
   rebuildConfig: {},
@@ -60,9 +60,9 @@ module.exports = {
     {
       name: "@electron-forge/maker-squirrel",
       config: {
-        name: "Codex",
+        name: "CodexUltra",
         authors: "OpenAI, Cometix Space",
-        description: "Codex Desktop App",
+        description: "CodexUltra Desktop App",
         setupIcon: "./resources/electron.ico",
         iconUrl: "https://raw.githubusercontent.com/Haleclipse/CodexDesktop-Rebuild/master/resources/electron.ico",
       },
@@ -70,11 +70,11 @@ module.exports = {
     { name: "@electron-forge/maker-zip", platforms: ["win32"] },
     {
       name: "@electron-forge/maker-deb",
-      config: { options: { name: "codex", productName: "Codex", genericName: "AI Coding Assistant", categories: ["Development", "Utility"], bin: "Codex", maintainer: "Cometix Space", homepage: "https://github.com/Haleclipse/CodexDesktop-Rebuild", icon: "./resources/electron.png" } },
+      config: { options: { name: "codex-ultra", productName: "CodexUltra", genericName: "AI Coding Assistant", categories: ["Development", "Utility"], bin: "CodexUltra", maintainer: "Cometix Space", homepage: "https://github.com/Haleclipse/CodexDesktop-Rebuild", icon: "./resources/electron.png" } },
     },
     {
       name: "@electron-forge/maker-rpm",
-      config: { options: { name: "codex", productName: "Codex", genericName: "AI Coding Assistant", categories: ["Development", "Utility"], bin: "Codex", license: "Apache-2.0", homepage: "https://github.com/Haleclipse/CodexDesktop-Rebuild", icon: "./resources/electron.png" } },
+      config: { options: { name: "codex-ultra", productName: "CodexUltra", genericName: "AI Coding Assistant", categories: ["Development", "Utility"], bin: "CodexUltra", license: "Apache-2.0", homepage: "https://github.com/Haleclipse/CodexDesktop-Rebuild", icon: "./resources/electron.png" } },
     },
     { name: "@electron-forge/maker-zip", platforms: ["linux"] },
   ],
@@ -105,6 +105,16 @@ module.exports = {
       console.log(`\n-- packageAfterCopy: ${platform}-${arch}`);
 
       const resourcesPath = path.dirname(buildPath);
+      const copyDir = (s, d) => {
+        fs.mkdirSync(d, { recursive: true });
+        let count = 0;
+        for (const e of fs.readdirSync(s, { withFileTypes: true })) {
+          const sp = path.join(s, e.name), dp = path.join(d, e.name);
+          if (e.isDirectory()) count += copyDir(sp, dp);
+          else if (!e.isSymbolicLink()) { fs.copyFileSync(sp, dp); count++; }
+        }
+        return count;
+      };
       const isLinux = platform === "linux";
       const platformKey = platform === "win32" ? "win" : `mac-${arch}`;
 
@@ -130,15 +140,6 @@ module.exports = {
       }
       let copied = 0;
 
-      const copyDir = (s, d) => {
-        fs.mkdirSync(d, { recursive: true });
-        for (const e of fs.readdirSync(s, { withFileTypes: true })) {
-          const sp = path.join(s, e.name), dp = path.join(d, e.name);
-          if (e.isDirectory()) copyDir(sp, dp);
-          else if (!e.isSymbolicLink()) { fs.copyFileSync(sp, dp); copied++; }
-        }
-      };
-
       for (const entry of fs.readdirSync(platformDir, { withFileTypes: true })) {
         if (skip.has(entry.name)) continue;
         if (entry.name.endsWith(".lproj")) continue;
@@ -147,12 +148,21 @@ module.exports = {
         const destPath = path.join(resourcesPath, entry.name);
 
         if (entry.isDirectory()) {
-          copyDir(srcPath, destPath);
+          copied += copyDir(srcPath, destPath);
         } else if (!entry.isSymbolicLink()) {
           fs.copyFileSync(srcPath, destPath);
           try { fs.chmodSync(destPath, 0o755); } catch {}
           copied++;
         }
+      }
+
+      const bridgeSrc = path.join(__dirname, "src", "codex-ultra");
+      if (fs.existsSync(bridgeSrc)) {
+        copied += copyDir(bridgeSrc, path.join(resourcesPath, "codex-ultra"));
+      }
+      const codexProSrc = path.join(__dirname, "vendor", "codexpro");
+      if (fs.existsSync(codexProSrc)) {
+        copied += copyDir(codexProSrc, path.join(resourcesPath, "vendor", "codexpro"));
       }
 
       console.log(`   [ok] ${copied} files (app.asar + unpacked + resources)`);

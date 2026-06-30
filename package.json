@@ -1,8 +1,8 @@
 {
-  "name": "codex-rebuild",
-  "productName": "Codex",
+  "name": "codex-ultra",
+  "productName": "CodexUltra",
   "version": "26.623.42026",
-  "description": "Codex Electron App - Cross-platform Build",
+  "description": "CodexUltra macOS app with bundled CodexPro bridge runtime",
   "main": "src/.vite/build/bootstrap.js",
   "scripts": {
     "start": "node scripts/start-dev.js",
@@ -12,6 +12,7 @@
     "patch:win": "node scripts/patch-all.js win",
     "forge:package": "electron-forge package",
     "forge:make": "electron-forge make",
+    "make:mac": "electron-forge make --platform=darwin",
     "build": "npm run build:mac-arm64",
     "build:mac-arm64": "node scripts/build-from-upstream.js --platform mac-arm64",
     "build:mac-x64": "node scripts/build-from-upstream.js --platform mac-x64",

@@ -1,0 +1,3 @@
+[submodule "vendor/codexpro"]
+	path = vendor/codexpro
+	url = https://github.com/rebel0789/codexpro.git
