@@ -1,7 +1,7 @@
 {
   "name": "codex-ultra",
   "productName": "CodexUltra",
-  "version": "26.623.70822",
+  "version": "0.0.1",
   "description": "CodexUltra macOS app with bundled CodexPro bridge runtime",
   "main": "src/.vite/build/bootstrap.js",
   "scripts": {

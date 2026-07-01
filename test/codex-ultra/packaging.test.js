@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
@@ -187,4 +189,84 @@ test("packaged macOS plist files do not reuse official Codex bundle identifiers"
     .map((file) => path.relative(root, file));
 
   assert.deepEqual(offenders, []);
+});
+
+test("packaged macOS resources exclude local release metadata", () => {
+  const resourcesDir = path.join(macApp, "Contents/Resources");
+  const offenders = walkFiles(resourcesDir, (file) => [".DS_Store", ".git"].includes(path.basename(file)))
+    .map((file) => path.relative(root, file));
+
+  assert.deepEqual(offenders, []);
+});
+
+test("release package metadata is pinned to 0.0.1", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  const lock = JSON.parse(fs.readFileSync(path.join(root, "package-lock.json"), "utf8"));
+
+  assert.equal(pkg.version, "0.0.1");
+  assert.equal(lock.version, "0.0.1");
+  assert.equal(lock.packages[""].version, "0.0.1");
+});
+
+test("build script uses the root release version for app metadata and artifact names", () => {
+  const script = path.join(root, "scripts/build-from-upstream.js");
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "codex-ultra-release-"));
+  const asarDir = path.join(tempDir, "_asar");
+  const plist = path.join(tempDir, "Info.plist");
+  fs.mkdirSync(asarDir);
+  fs.writeFileSync(
+    path.join(asarDir, "package.json"),
+    `${JSON.stringify({ name: "codex", productName: "Codex", version: "26.999.0" }, null, 2)}\n`,
+  );
+  fs.writeFileSync(
+    plist,
+    `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleShortVersionString</key>
+  <string>26.999.0</string>
+  <key>CFBundleVersion</key>
+  <string>9999</string>
+</dict>
+</plist>
+`,
+  );
+
+  const result = spawnSync(process.execPath, [
+    "-e",
+    `
+const build = require(${JSON.stringify(script)});
+const fs = require("node:fs");
+const path = require("node:path");
+const asarDir = ${JSON.stringify(asarDir)};
+const plist = ${JSON.stringify(plist)};
+build.syncAsarPackageMetadata(asarDir);
+build.syncMacBundleVersion(plist);
+const pkg = JSON.parse(fs.readFileSync(path.join(asarDir, "package.json"), "utf8"));
+const names = build.getMacArtifactNames("mac-arm64");
+console.log(JSON.stringify({
+  releaseVersion: build.getReleaseVersion(),
+  packageVersion: pkg.version,
+  packageName: pkg.name,
+  packageProductName: pkg.productName,
+  dmgName: names.dmgName,
+  zipName: names.zipName,
+  shortVersion: require("node:child_process").execFileSync("plutil", ["-extract", "CFBundleShortVersionString", "raw", plist], { encoding: "utf8" }).trim(),
+  bundleVersion: require("node:child_process").execFileSync("plutil", ["-extract", "CFBundleVersion", "raw", plist], { encoding: "utf8" }).trim(),
+}));
+`,
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    releaseVersion: "0.0.1",
+    packageVersion: "0.0.1",
+    packageName: "codex-ultra",
+    packageProductName: "CodexUltra",
+    dmgName: "CodexUltra-mac-arm64-0.0.1.dmg",
+    zipName: "CodexUltra-mac-arm64-0.0.1.zip",
+    shortVersion: "0.0.1",
+    bundleVersion: "1",
+  });
 });

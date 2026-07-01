@@ -19,12 +19,14 @@ const SRC_DIR = path.join(PROJECT_ROOT, "src");
 const OUT_DIR = path.join(PROJECT_ROOT, "out");
 const CODEX_ULTRA_SRC = path.join(PROJECT_ROOT, "src", "codex-ultra");
 const CODEXPRO_SRC = path.join(PROJECT_ROOT, "vendor", "codexpro");
+const ROOT_PKG = path.join(PROJECT_ROOT, "package.json");
 
 const TARGET_TRIPLE_MAP = {
   "mac-arm64": "aarch64-apple-darwin",
   "mac-x64": "x86_64-apple-darwin",
   "win": "x86_64-pc-windows-msvc",
 };
+const SKIPPED_COPY_ENTRIES = new Set([".DS_Store", ".git", "__MACOSX"]);
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -37,6 +39,7 @@ function copyRecursive(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   let count = 0;
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
+    if (SKIPPED_COPY_ENTRIES.has(e.name)) continue;
     const s = path.join(src, e.name), d = path.join(dest, e.name);
     if (e.isDirectory()) { count += copyRecursive(s, d); }
     else if (e.isSymbolicLink()) {
@@ -68,6 +71,50 @@ function copyCodexUltraResources(resourcesDir) {
   }
 }
 
+function getRootPackage() {
+  return JSON.parse(fs.readFileSync(ROOT_PKG, "utf8"));
+}
+
+function getReleaseVersion() {
+  return getRootPackage().version || "unknown";
+}
+
+function getReleaseBuildNumber() {
+  return "1";
+}
+
+function syncAsarPackageMetadata(asarDir) {
+  const packageFile = path.join(asarDir, "package.json");
+  if (!fs.existsSync(packageFile)) return;
+  const rootPkg = getRootPackage();
+  const pkg = JSON.parse(fs.readFileSync(packageFile, "utf8"));
+  pkg.name = rootPkg.name || "codex-ultra";
+  pkg.productName = rootPkg.productName || "CodexUltra";
+  pkg.version = getReleaseVersion();
+  if (rootPkg.description) pkg.description = rootPkg.description;
+  fs.writeFileSync(packageFile, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
+function syncMacBundleVersion(infoPlist) {
+  if (!fs.existsSync(infoPlist)) return;
+  const version = getReleaseVersion();
+  const buildNumber = getReleaseBuildNumber();
+  execSync(`plutil -replace CFBundleShortVersionString -string "${version}" "${infoPlist}"`, { stdio: "pipe" });
+  execSync(`plutil -replace CFBundleVersion -string "${buildNumber}" "${infoPlist}"`, { stdio: "pipe" });
+}
+
+function getMacArtifactNames(platform) {
+  const version = getReleaseVersion();
+  return {
+    dmgName: `CodexUltra-${platform}-${version}.dmg`,
+    zipName: `CodexUltra-${platform}-${version}.zip`,
+  };
+}
+
+function getWinArtifactName() {
+  return `Codex-win-x64-${getReleaseVersion()}.zip`;
+}
+
 function renameMacAppBundle(outApp) {
   const infoPlist = path.join(outApp, "Contents", "Info.plist");
   if (!fs.existsSync(infoPlist)) return;
@@ -84,6 +131,7 @@ function renameMacAppBundle(outApp) {
   }
   try { execSync(`plutil -replace CFBundleURLTypes.0.CFBundleURLName -string "CodexUltra" "${infoPlist}"`, { stdio: "pipe" }); } catch {}
   try { execSync(`plutil -replace CFBundleURLTypes.0.CFBundleURLSchemes -json '["codexultra"]' "${infoPlist}"`, { stdio: "pipe" }); } catch {}
+  syncMacBundleVersion(infoPlist);
   patchMacPlistIdentifiers(outApp);
   const macosDir = path.join(outApp, "Contents", "MacOS");
   const oldExe = path.join(macosDir, "Codex");
@@ -206,6 +254,7 @@ function buildMac(platform) {
     console.error(`[x] ${platform}/_asar/ not found. Run sync-upstream first.`);
     process.exit(1);
   }
+  syncAsarPackageMetadata(asarDir);
 
   // 1. Find the .app in the ZIP extract cache
   const tempDir = path.join(require("os").tmpdir(), "codex-sync");
@@ -274,15 +323,14 @@ function buildMac(platform) {
   }
 
   // 8. Create DMG
-  const version = getVersion(asarDir);
-  const dmgName = `CodexUltra-${platform}-${version}.dmg`;
+  const { dmgName, zipName } = getMacArtifactNames(platform);
   const dmgPath = path.join(OUT_DIR, dmgName);
   console.log(`   [dmg] ${dmgName}`);
   execSync(`hdiutil create -volname CodexUltra -srcfolder "${outAppDir}" -ov -format UDZO "${dmgPath}"`, { stdio: "pipe" });
   const sizeMB = (fs.statSync(dmgPath).size / 1048576).toFixed(1);
   console.log(`   [ok] ${dmgPath} (${sizeMB} MB)`);
 
-  const zipPath = path.join(OUT_DIR, `CodexUltra-${platform}-${version}.zip`);
+  const zipPath = path.join(OUT_DIR, zipName);
   console.log(`   [zip] ${path.basename(zipPath)}`);
   execSync(`ditto -c -k --sequesterRsrc --keepParent "${outApp}" "${zipPath}"`, { stdio: "pipe" });
 }
@@ -297,6 +345,7 @@ function buildWin(platform) {
     console.error(`[x] win/_asar/ not found. Run sync-upstream first.`);
     process.exit(1);
   }
+  syncAsarPackageMetadata(asarDir);
 
   // Windows: use the MSIX extract cache
   const tempDir = path.join(require("os").tmpdir(), "codex-sync");
@@ -344,8 +393,7 @@ function buildWin(platform) {
   replaceCodex(platform, resourcesDir, "codex.exe");
 
   // Create ZIP
-  const version = getVersion(asarDir);
-  const zipName = `Codex-win-x64-${version}.zip`;
+  const zipName = getWinArtifactName();
   const zipPath = path.join(OUT_DIR, zipName);
   console.log(`   [zip] ${zipName}`);
   execSync(`7zz a -tzip -mx=5 "${zipPath}" .`, { cwd: outApp });
@@ -405,15 +453,6 @@ function replaceCodex(platform, resourcesDir, binName) {
   }
 }
 
-function getVersion(asarDir) {
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(asarDir, "package.json"), "utf-8"));
-    return pkg.version || "unknown";
-  } catch {
-    return "unknown";
-  }
-}
-
 // ─── Main ───────────────────────────────────────────────────────
 
 function main() {
@@ -436,4 +475,15 @@ function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  getReleaseVersion,
+  getReleaseBuildNumber,
+  getMacArtifactNames,
+  getWinArtifactName,
+  syncAsarPackageMetadata,
+  syncMacBundleVersion,
+};
