@@ -16,6 +16,33 @@
 
 ---
 
+## 📖 Usage Workflow (Semi-Automatic)
+
+Currently, the setup and usage flow is **semi-automatic**:
+
+1. **Install & Launch**: Install and open `CodexUltra`.
+2. **Switch Mode**: Toggle the mode switch in the composer to **GPT Plan (GPT规划)**.
+3. **Configure URL**: If not configured yet, a **Server URL** dialog will pop up.
+4. **Auto Tunneling**: The app automatically starts the local `CodexPro` bridge and launches a Cloudflare Quick Tunnel, generating a public URL like:
+   `https://xxxx.trycloudflare.com/mcp?codexpro_token=...`
+5. **Link ChatGPT**: Copy this URL, open the [ChatGPT Connectors Settings](https://chatgpt.com/#settings/Connectors), and create a new custom connector.
+6. **Authentication**: Select **None** as the authentication type (the security token is already embedded in the URL query string).
+7. **Verify**: Save the connector, and you can now test GPT invoking local agentic tools in your workspace.
+
+### ⚠️ Current Limitations & Caveats
+
+- **Manual Configuration Required**: Adding the URL to the ChatGPT connector list cannot be fully automated by the app.
+- **Dynamic Tunnel URLs**: Because it uses Cloudflare's *Quick Tunnel*, the URL is temporary. Restarting the bridge or the app will generate a new URL, requiring you to update the connector configuration in ChatGPT.
+- **Network Dependency**: If the system lacks the `cloudflared` binary, `CodexPro` will attempt to download it automatically to `~/.codexpro/bin`. This step requires an active internet connection.
+- **macOS Gatekeeper Warning**: Since production builds are currently **ad-hoc signed**, macOS Gatekeeper might block the app on first launch. You can bypass this by right-clicking the app and selecting *Open*, or allowing it in *System Settings > Privacy & Security*. (Smooth distribution requires a paid Apple Developer ID signature and notarization).
+
+### 🗺️ Future Roadmap (Next Steps)
+To achieve a "configure once, run forever" experience without repeatedly copying URLs, the project plans to support:
+- **Cloudflare Named Tunnels**: Persistent, static tunnel configurations.
+- **Custom Domains**: Pointing the bridge directly to your own secure domain.
+
+---
+
 ## 🌟 Key Features
 
 - **CodexPro Bridge Runtime Integration**: Bundles the `vendor/codexpro` source runtime, providing an active IPC channel between the desktop app and your local filesystem.

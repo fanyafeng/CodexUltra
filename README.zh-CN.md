@@ -16,6 +16,33 @@
 
 ---
 
+## 📖 使用说明 (半自动工作流)
+
+目前，本项目的配置和使用流程是**半自动（Semi-Automatic）**的：
+
+1. **安装并打开**：安装并启动 `CodexUltra`。
+2. **切换模式**：在输入框中切换到 **GPT规划 (GPT Plan)** 模式。
+3. **配置 URL**：如果是首次使用，会自动弹出 **Server URL** 配置窗口。
+4. **自动创建隧道**：App 会在后台自动启动本地的 `CodexPro` 桥接服务，并自动开启 Cloudflare Quick Tunnel 隧道，生成类似如下的临时公网 URL：
+   `https://xxxx.trycloudflare.com/mcp?codexpro_token=...`
+5. **连接 ChatGPT**：复制该 URL，打开 [ChatGPT 连接器设置 (ChatGPT Connectors Settings)](https://chatgpt.com/#settings/Connectors)，新建一个自定义连接器。
+6. **身份验证方式**：认证方式选择 **None**（安全凭证 Token 已经内置在 URL 参数中）。
+7. **测试与使用**：保存连接器后，即可测试并使用网页端 GPT 来调用本地工作区的开发工具。
+
+### ⚠️ 当前限制与注意事项
+
+- **无法全自动绑定**：ChatGPT 网页端的“新建连接器/粘贴 URL/保存”这一步目前无法由 App 全自动完成，仍需手动配置一次。
+- **非永久 Tunnel URL**：目前采用的是 Cloudflare Quick Tunnel 快连隧道，生成的 URL 是**临时且非永久的**。当 bridge 或 App 重启后，会重新生成新的 URL，您需要到 ChatGPT 设置中更新旧的 URL。
+- **依赖网络环境**：如果您的电脑中没有安装 `cloudflared`，`CodexPro` 会尝试自动下载到 `~/.codexpro/bin`，这需要保证您的网络能够正常下载依赖。
+- **macOS Gatekeeper 警告**：目前发布的安装包采用的是 **ad-hoc 临时签名**，外部用户首次打开时可能会被 macOS 系统安全机制（Gatekeeper）拦截报错。您可以通过右键点击 App 选择“打开”，或在“系统设置 > 隐私与安全”中手动允许运行（要实现真正顺滑的无警告分发，后续需要使用付费的 Apple Developer ID 签名并进行公证/notarization）。
+
+### 🗺️ 未来路线图 (后续规划)
+为了实现“一次配置，永久免复制”的体验，下一步计划开发：
+- **Cloudflare Named Tunnel**：配置静态永久的命名隧道。
+- **自定义域名模式**：支持绑定用户自己的安全域名。
+
+---
+
 ## 🌟 核心特性
 
 - **CodexPro 桥接运行时集成**：内置 `vendor/codexpro` 源码运行时，在桌面应用前端和本地文件系统之间提供活跃的 IPC 通道。
