@@ -2,98 +2,147 @@
 
 [简体中文](README.zh-CN.md) | English
 
-`CodexUltra` is an enhanced rebuild of the official **OpenAI Codex Desktop Application** (available on the Microsoft Store as Product ID `9plm9xgg6vks` and macOS Sparkle feeds). It introduces custom branding, isolated workspace sessions, cloud-control bypasses, and integrates the **CodexPro Bridge Runtime** to enable advanced local filesystem integrations with OpenAI's agentic developer platform.
+`CodexUltra` is a macOS desktop rebuild of the official OpenAI Codex Desktop client. It keeps local Codex execution intact and adds a CodexPro bridge so ChatGPT in the browser can connect to the current workspace through a Server URL, produce plans, write `.ai-bridge` handoff files, and hand execution back to the local CodexUltra app.
+
+Current version: `0.0.1`
 
 ---
 
-## 💻 Supported Platforms
+## How To Use
+
+### 1. Install And Launch
+
+1. Download `CodexUltra-mac-arm64-0.0.1.dmg` from the release artifacts.
+2. Open the DMG and copy `CodexUltra.app` to `/Applications`.
+3. Launch `CodexUltra`.
+4. If macOS blocks the app because the developer cannot be verified, right-click `CodexUltra.app` and choose `Open`, or allow it in `System Settings > Privacy & Security`.
+
+> Current builds are ad-hoc signed. Smooth public distribution requires Apple Developer ID signing and notarization.
+
+### 2. Use Codex Execute
+
+Use `Codex执行` / `Codex Execute` for local code changes, terminal commands, and file edits.
+
+This mode uses the local CodexUltra client and does not require a ChatGPT Server URL.
+
+### 3. Configure GPT Planning
+
+`GPT规划` / `GPT Plan` is for browser ChatGPT planning, reading, review, and handoff. The local bridge is automatic, but adding the connector in ChatGPT is still manual.
+
+1. Switch the composer mode to `GPT规划`.
+2. If no URL is configured, CodexUltra shows a `Server URL` dialog.
+3. CodexUltra starts the local CodexPro bridge and opens a Cloudflare Quick Tunnel.
+4. Wait for a URL like:
+
+```text
+https://xxxx.trycloudflare.com/mcp?codexpro_token=...
+```
+
+5. Click `Copy URL`.
+6. Click `Open Settings`, or open [ChatGPT Connectors Settings](https://chatgpt.com/#settings/Connectors).
+7. Create a custom connector / MCP connector in ChatGPT.
+8. Paste the copied URL into `Server URL`.
+9. Choose `None` for authentication because `codexpro_token` is already in the URL.
+10. Save the connector.
+
+### 4. Smoke Test The GPT Bridge
+
+In ChatGPT, choose the connector you created and send:
+
+```text
+Use CodexPro to write one line to .ai-bridge/gpt-smoke-test.md: GPT bridge smoke test OK. Only write that file and do not modify anything else.
+```
+
+Then check the local workspace for:
+
+```text
+.ai-bridge/gpt-smoke-test.md
+```
+
+Expected content:
+
+```text
+GPT bridge smoke test OK
+```
+
+### 5. Recommended Daily Workflow
+
+1. Switch CodexUltra to `GPT规划`.
+2. Ask ChatGPT to inspect the project through CodexPro and produce a plan.
+3. Ask ChatGPT to write the final plan to `.ai-bridge/current-plan.md`.
+4. Switch back to `Codex执行`.
+5. Ask CodexUltra to execute the local changes from `.ai-bridge/current-plan.md`.
+
+This keeps ChatGPT focused on planning and review while local Codex performs implementation and verification.
+
+### 6. Important Notes
+
+- **Not fully automatic**: CodexUltra can start the local bridge and generate the Server URL, but ChatGPT connector creation still requires manual setup in the browser.
+- **Quick Tunnel URLs change**: The default Cloudflare Quick Tunnel URL is temporary. Restarting the app or bridge can produce a new `trycloudflare.com` URL, so the ChatGPT connector may need to be updated.
+- **Keep the app running**: ChatGPT can only call local tools while CodexUltra / CodexPro bridge is running.
+- **Do not publish the Server URL**: It includes `codexpro_token`, which acts like a temporary access credential.
+- **Network is required**: If `cloudflared` is missing, CodexPro attempts to download it to `~/.codexpro/bin`.
+
+---
+
+## Supported Platforms
 
 | Platform | Architecture | Status |
 |----------|--------------|--------|
-| macOS    | x64, arm64   | ✅ Supported |
-| Windows  | x64          | ⏳ In Development |
-| Linux    | x64, arm64   | ⏳ In Development |
+| macOS | arm64 | `0.0.1` release artifact available |
+| macOS | x64 | Build script available, build locally |
+| Windows | x64 | In development |
+| Linux | x64, arm64 | In development |
 
 ---
 
-## 📖 Usage Workflow (Semi-Automatic)
+## Key Features
 
-Currently, the setup and usage flow is **semi-automatic**:
-
-1. **Install & Launch**: Install and open `CodexUltra`.
-2. **Switch Mode**: Toggle the mode switch in the composer to **GPT Plan (GPT规划)**.
-3. **Configure URL**: If not configured yet, a **Server URL** dialog will pop up.
-4. **Auto Tunneling**: The app automatically starts the local `CodexPro` bridge and launches a Cloudflare Quick Tunnel, generating a public URL like:
-   `https://xxxx.trycloudflare.com/mcp?codexpro_token=...`
-5. **Link ChatGPT**: Copy this URL, open the [ChatGPT Connectors Settings](https://chatgpt.com/#settings/Connectors), and create a new custom connector.
-6. **Authentication**: Select **None** as the authentication type (the security token is already embedded in the URL query string).
-7. **Verify**: Save the connector, and you can now test GPT invoking local agentic tools in your workspace.
-
-### ⚠️ Current Limitations & Caveats
-
-- **Manual Configuration Required**: Adding the URL to the ChatGPT connector list cannot be fully automated by the app.
-- **Dynamic Tunnel URLs**: Because it uses Cloudflare's *Quick Tunnel*, the URL is temporary. Restarting the bridge or the app will generate a new URL, requiring you to update the connector configuration in ChatGPT.
-- **Network Dependency**: If the system lacks the `cloudflared` binary, `CodexPro` will attempt to download it automatically to `~/.codexpro/bin`. This step requires an active internet connection.
-- **macOS Gatekeeper Warning**: Since production builds are currently **ad-hoc signed**, macOS Gatekeeper might block the app on first launch. You can bypass this by right-clicking the app and selecting *Open*, or allowing it in *System Settings > Privacy & Security*. (Smooth distribution requires a paid Apple Developer ID signature and notarization).
-
-### 🗺️ Future Roadmap (Next Steps)
-To achieve a "configure once, run forever" experience without repeatedly copying URLs, the project plans to support:
-- **Cloudflare Named Tunnels**: Persistent, static tunnel configurations.
-- **Custom Domains**: Pointing the bridge directly to your own secure domain.
+- **Codex / GPT mode switch**: `Codex Execute` is for local implementation; `GPT Plan` is for browser ChatGPT planning, review, and handoff.
+- **CodexPro bridge integration**: Bundles `vendor/codexpro` and exposes the current workspace to ChatGPT through an MCP Server URL.
+- **Cloudflare Quick Tunnel**: Generates a public HTTPS Server URL for ChatGPT browser access.
+- **`.ai-bridge` handoff directory**: Central location for GPT plans, reviews, smoke tests, and Codex execution context.
+- **User data isolation**: Stores profile, cache, and state under `CodexUltra` instead of overwriting official Codex data.
+- **Safety checks**: Redacts common secrets and blocks workspace path traversal.
+- **Debug support**: Keeps DevTools / inspection support available for development and troubleshooting.
 
 ---
 
-## 🌟 Key Features
+## Project Structure
 
-- **CodexPro Bridge Runtime Integration**: Bundles the `vendor/codexpro` source runtime, providing an active IPC channel between the desktop app and your local filesystem.
-- **Cloudflare Tunnel Integration**: Automatically provisions a secure **Cloudflare Quick Tunnel** (`https://*.trycloudflare.com`) to expose the local MCP bridge over HTTPS, allowing the ChatGPT Web Agent Connector interface to securely access your local workspace.
-- **Dynamic Mode Switch Panel**: Mounts a custom control panel inside the composer input webview with two modes:
-  - 📝 **GPT Plan (GPT规划)**: Ideal for planning, reading, and reviewing. Prompts are packaged with workspace context and copied to the clipboard. The client prompts you to copy the public Tunnel URL and redirects you to the [ChatGPT Connectors Settings](https://chatgpt.com/#settings/Connectors) to easily link the agent.
-  - ⚡ **Codex Execute (Codex执行)**: Enables real-time filesystem edits and terminal commands, allowing the model to perform changes and write to files directly in your local workspace.
-- **UserData Directory Isolation**: Isolates user profile, cache, and state under `CodexUltra` to avoid interfering with official OpenAI Codex installations.
-- **Statsig Cloud Control Bypass (App Sunset Patch)**: Bypasses forced client sunset/update gates (such as Statsig gate `2929582856` which normally displays a full-screen block requiring updates) and maps internal Statsig gates.
-- **Enhanced Debugging**: Enables Chrome DevTools and element inspections directly in production builds.
-- **Internationalization Support**: Patches English (`en-US`) and custom locale injections.
-- **Built-in Security & Safety**: Features automatic API key/secret redaction and strict workspace path traversal checks.
-
----
-
-## 🛠️ Project Architecture
-
-```
+```text
 ├── src/
-│   ├── codex-ultra/      # Core integration layer
-│   │   ├── bridge/       # IPC handlers, safety checks, sessions, and Git tools
-│   │   └── renderer/     # Frontend integration and UI styling
-│   ├── mac-arm64/        # Unpacked upstream assets (generated during sync)
-│   └── mac-x64/          # Unpacked upstream assets (generated during sync)
-├── scripts/              # Custom patching toolchain
-│   ├── patch-all.js      # Orchestrator to run all patches in sequence
-│   ├── patch-codex-ultra.js # Injects branding, IPC registration, and UI mode controls
-│   ├── patch-sunset.js   # Disables forced app sunset/updates
-│   ├── patch-devtools.js # Enables developer inspection tools
-│   ├── patch-i18n.js     # Patches language files and localization
-│   ├── fetch-msstore.js  # Fetches assets from Microsoft Store for Windows builds
-│   └── build-from-upstream.js # Main production packaging orchestrator
+│   ├── codex-ultra/          # CodexUltra integration layer
+│   │   ├── bridge/           # IPC, CodexPro bridge, sessions, context, safety checks
+│   │   └── renderer/         # Frontend injection and UI
+│   ├── mac-arm64/            # Unpacked upstream macOS arm64 assets
+│   └── mac-x64/              # Unpacked upstream macOS x64 assets
+├── scripts/
+│   ├── patch-all.js          # Patch orchestrator
+│   ├── patch-codex-ultra.js  # CodexUltra UI / IPC / bridge injection
+│   ├── patch-devtools.js     # DevTools patch
+│   ├── patch-i18n.js         # Locale patching
+│   ├── sync-upstream.js      # Sync upstream client assets
+│   └── build-from-upstream.js # Production packaging script
 ├── test/
-│   └── codex-ultra/      # Verification and regression tests
-├── forge.config.js       # Electron Forge configuration
-└── package.json          # Node dependencies and project scripts
+│   └── codex-ultra/          # Bridge and packaging regression tests
+├── vendor/
+│   └── codexpro/             # CodexPro bridge runtime
+└── package.json
 ```
 
 ---
 
-## 🚀 Getting Started
+## Developer Setup
 
 ### Prerequisites
 
-- Node.js (v18 or higher recommended)
-- `npm` package manager
-- macOS: `plutil` (pre-installed) for `.plist` modifications during branding
+- Node.js 18 or newer
+- npm
+- macOS build tools available by default: `plutil`, `hdiutil`, `codesign`
+- `vendor/codexpro` submodule
 
-### Installation
-
-Clone the repository with submodules:
+### Clone And Install
 
 ```bash
 git clone --recurse-submodules git@github.com:fanyafeng/CodexUltra.git
@@ -101,82 +150,108 @@ cd CodexUltra
 npm install
 ```
 
----
+If the repository was cloned without submodules:
 
-## 💻 Development & Syncing
+```bash
+git submodule update --init --recursive
+```
 
-### Sync Upstream
-To synchronize and unpack the latest release assets from the upstream desktop application feed:
+### Sync Upstream Assets
 
 ```bash
 npm run sync
 ```
 
 ### Apply Patches
-All patching scripts under `scripts/` can be applied automatically:
 
 ```bash
-# Run all patches across all platforms
 npm run patch
 
-# Run patches for macOS only
+# macOS only
 npm run patch:mac
-
-# Run patches for Windows only
-npm run patch:win
 ```
 
-### Start in Development Mode
-To boot up the patched Electron client in a local development environment:
+### Start Development Mode
 
 ```bash
 npm run dev
-# or
-npm run start
 ```
 
 ---
 
-## 📦 Building and Packaging
+## Build Release Artifacts
 
-Production packaging extracts, patches, and rebuilds the final application bundles inside the `out/` directory.
+Default macOS arm64 build:
 
-### macOS (Apple Silicon & Intel)
 ```bash
-# Build for Apple Silicon (macOS arm64) - Default build
 npm run build
+```
 
-# Build for Intel Mac (macOS x64)
+Artifacts are written to `out/`:
+
+```text
+out/CodexUltra-mac-arm64-0.0.1.dmg
+out/CodexUltra-mac-arm64-0.0.1.zip
+```
+
+Build macOS x64:
+
+```bash
 npm run build:mac-x64
+```
 
-# Rebuild both macOS bundles
+Build both macOS architectures:
+
+```bash
 npm run build:mac
 ```
 
-### Windows & Linux — ⏳ In Development
-> [!NOTE]
-> Windows (`npm run build:win`) and Linux (`npm run build:linux`) build commands are defined in `package.json` but are temporarily disabled or in development.
+Windows and Linux build scripts are still in development and are not recommended as current release artifacts.
 
 ---
 
-## 🧪 Testing and Verification
+## Testing And Verification
 
-Tests are written using Node's native test runner (`node:test`) to verify both core library logic and packaging compliance.
+Run regression tests:
 
-Run all tests:
 ```bash
-node --test test/codex-ultra/**/*.test.js
+node --test test/codex-ultra/bridge-core.test.js test/codex-ultra/packaging.test.js
 ```
 
-- **[bridge-core.test.js](test/codex-ultra/bridge-core.test.js)**: Verifies secrets redaction, path traversal safety, workspace setup, and metadata storage.
-- **[packaging.test.js](test/codex-ultra/packaging.test.js)**: Verifies that patches have been correctly applied to generated bundle outputs (such as user profile path changes in `bootstrap.js` and IPC bindings).
+Verify macOS code signature integrity:
+
+```bash
+codesign --verify --deep --strict --verbose=4 out/mac-arm64/CodexUltra.app
+```
+
+Check app version metadata:
+
+```bash
+plutil -p out/mac-arm64/CodexUltra.app/Contents/Info.plist | rg 'CFBundleShortVersionString|CFBundleVersion'
+```
+
+Expected values for `0.0.1`:
+
+```text
+CFBundleShortVersionString => 0.0.1
+CFBundleVersion => 1
+```
 
 ---
 
-## 👥 Credits
+## Before Open Sourcing
 
-- **[OpenAI](https://github.com/openai)**: Creator of the original OpenAI Codex Desktop client.
-- **[Cometix Space (Haleclipse)](https://github.com/Haleclipse)**: Base cross-platform rebuilding framework and build toolchains.
-- **[fanyafeng](https://github.com/fanyafeng)**: CodexUltra customizations and active development.
-- **[Electron Forge](https://www.electronforge.io/)**: Packaging and distribution toolchain.
+- Do not commit `out/` build artifacts.
+- Do not commit `.ai-bridge/`.
+- Do not commit a full `https://*.trycloudflare.com/mcp?codexpro_token=...` URL.
+- Do not commit local `.env` files, Cloudflare tokens, ngrok tokens, Apple signing certificates, or private keys.
+- Prefer `git archive` or GitHub release source archives instead of zipping the full working directory.
 
+---
+
+## Credits
+
+- [OpenAI](https://github.com/openai): Official Codex Desktop client.
+- [Cometix Space (Haleclipse)](https://github.com/Haleclipse): Cross-platform rebuild and packaging foundation.
+- [fanyafeng](https://github.com/fanyafeng): CodexUltra customization and development.
+- [Electron Forge](https://www.electronforge.io/): Electron packaging toolchain.
