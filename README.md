@@ -251,7 +251,11 @@ CFBundleVersion => 1
 
 ## Credits
 
+`CodexUltra` is created by combining and gluing two excellent open-source projects:
+- **[CodexPro](https://github.com/rebel0789/codexpro)**: The bridge runtime and agent execution layer.
+- **[CodexDesktop-Rebuild](https://github.com/Haleclipse/CodexDesktop-Rebuild)**: The cross-platform rebuilding and packaging framework.
+
+Special thanks to:
 - [OpenAI](https://github.com/openai): Official Codex Desktop client.
-- [Cometix Space (Haleclipse)](https://github.com/Haleclipse): Cross-platform rebuild and packaging foundation.
 - [fanyafeng](https://github.com/fanyafeng): CodexUltra customization and development.
 - [Electron Forge](https://www.electronforge.io/): Electron packaging toolchain.

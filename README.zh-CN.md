@@ -253,7 +253,11 @@ CFBundleVersion => 1
 
 ## 致谢
 
+`CodexUltra` 是通过整合与粘合以下两个优秀的开源项目而构建的：
+- **[CodexPro](https://github.com/rebel0789/codexpro)**：本地桥接运行时与智能体执行层。
+- **[CodexDesktop-Rebuild](https://github.com/Haleclipse/CodexDesktop-Rebuild)**：跨平台重构与打包框架。
+
+特别感谢：
 - [OpenAI](https://github.com/openai)：官方 Codex Desktop 客户端。
-- [Cometix Space (Haleclipse)](https://github.com/Haleclipse)：跨平台重构和打包基础。
 - [fanyafeng](https://github.com/fanyafeng)：CodexUltra 定制开发。
 - [Electron Forge](https://www.electronforge.io/)：Electron 打包工具链。
